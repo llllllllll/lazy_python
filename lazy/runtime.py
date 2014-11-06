@@ -5,7 +5,6 @@ from sys import _getframe
 
 from lazy.transformer import LazyTransformer
 from lazy.thunk import Thunk
-from lazy.utils import isolate_namespace
 
 
 def run_lazy(src, name='<string>', globals=None, locals=None):
@@ -44,8 +43,3 @@ def lazy_function(f):
         locals=locals_,
     )
     return locals_[f.__name__]
-
-
-@lazy_function
-def f(a, b):
-    return a + b
