@@ -1,7 +1,15 @@
 import copy
 import math
 import operator
-from six import iteritems
+from six import iteritems, itervalues, with_metaclass
+
+from lazy.utils import isolate_namespace
+
+
+# Isolated attribute names.
+_function_name = isolate_namespace('_function')
+_args_name = isolate_namespace('_args')
+_kwargs_name = isolate_namespace('_kwargs')
 
 
 def _maybe_strict(v):
@@ -23,15 +31,65 @@ def _safesetattr(obj, attr, value):
     object.__setattr__(obj, attr, value)
 
 
-class Thunk(object):
+def _safegetattr(obj, name, *default):
+    """
+    Because we are overridding __getattr__, we need a
+    non-recursive way of getting attributes.
+
+    This is used to get attributes internally.
+    """
+    return object.__getattr__(obj, name, *default)
+
+
+class MagicExpansionMeta(type):
+    """
+    A metaclass for expanding the @reflected and @inplace decorators.
+    """
+    def __new__(mcls, name, bases, dict_):
+        for v in itervalues(dict(dict_)):
+            aliases = getattr(v, '_aliases', ())
+            for alias in aliases:
+                dict_[alias] = v
+
+        return type.__new__(mcls, name, bases, dict_)
+
+
+def _alias(f, prefix):
+    name = f.__name__
+    if not (name.startswith('__') and name.endswith('__')):
+        raise ValueError('%s must be a dunder method' % name)
+
+    name = name[2:-2]
+    aliases = getattr(f, '_aliases', set())
+    aliases.add('__%s%s__' % (prefix, name))
+    f._aliases = aliases
+
+
+def reflected(f):
+    """
+    Aliases this magic with the reflected version.
+    """
+    _alias(f, 'r')
+    return f
+
+
+def inplace(f):
+    """
+    Aliases this magic with the inplace version.
+    """
+    _alias(f, 'i')
+    return f
+
+
+class Thunk(with_metaclass(MagicExpansionMeta)):
     """
     A defered computation.
     This can be used wherever a strict value is used (maybe?)
     """
     def __init__(self, function, *args, **kwargs):
-        _safesetattr(self, '_function', function)
-        _safesetattr(self, '_args', args)
-        _safesetattr(self, '_kwargs', kwargs)
+        _safesetattr(self, _function_name, function)
+        _safesetattr(self, _args_name, args)
+        _safesetattr(self, _kwargs_name, kwargs)
 
     @property
     def strict(self):
@@ -45,11 +103,12 @@ class Thunk(object):
         Actually get the value and store it.
         """
         # Strictly evaluate the args and kwargs.
-        args = [_maybe_strict(arg) for arg in self._args]
-        kwargs = {k: _maybe_strict(v) for k, v in iteritems(self._kwargs)}
+        args = [_maybe_strict(arg) for arg in _safegetattr(self, _args_name)]
+        kwargs = {k: _maybe_strict(v)
+                  for k, v in iteritems(_safegetattr(self, _kwargs_name))}
 
         # The function could be a Thunk too, like (a + b)(arg)
-        function = _maybe_strict(self._function)
+        function = _maybe_strict(_safegetattr(self, _function_name))
 
         # Compute the strict value.
         strict = function(*args, **kwargs)
@@ -59,6 +118,9 @@ class Thunk(object):
         return strict
 
     # Override all the sensible magic methods.
+
+    def __bases__(self):
+        return type(self.strict).__bases__
 
     def __eq__(self, other):
         return Thunk(operator.eq, self, other)
@@ -102,70 +164,70 @@ class Thunk(object):
     def __trunc__(self):
         return Thunk(math.trunc, self)
 
+    @reflected
+    @inplace
     def __add__(self, other):
         return Thunk(operator.add, self, other)
-    __radd__ = __add__
-    __iadd__ = __add__
 
+    @reflected
+    @inplace
     def __sub__(self, other):
         return Thunk(operator.sub, self, other)
-    __rsub__ = __sub__
-    __isub__ = __sub__
 
+    @reflected
+    @inplace
     def __mul__(self, other):
         return Thunk(operator.mul, self, other)
-    __rmul__ = __mul__
-    __imul__ = __mul__
 
+    @reflected
+    @inplace
     def __floordiv__(self, other):
         return Thunk(operator.floordiv, self, other)
-    __rfloordiv__ = __floordiv__
-    __ifloordiv__ = __floordiv__
 
+    @reflected
+    @inplace
     def __div__(self, other):
         return Thunk(operator.div, self, other)
-    __rdiv__ = __div__
-    __idiv__ = __div__
 
+    @reflected
+    @inplace
     def __mod__(self, other):
         return Thunk(operator.mod, self, other)
-    __rmod__ = __mod__
-    __imod__ = __mod__
 
+    @reflected
+    @inplace
     def __divmod__(self, other):
         return Thunk(divmod, self, other)
-    __rdivmod__ = __divmod__
-    __idivmod__ = __divmod__
 
+    @reflected
+    @inplace
     def __pow__(self, other):
         return Thunk(pow, self, other)
-    __rpow__ = __pow__
-    __ipow__ = __pow__
 
+    @reflected
+    @inplace
     def __lshift__(self, other):
         return Thunk(operator.lshift, self, other)
-    __rlshift__ = __lshift__
-    __ilshift__ = __lshift__
 
+    @reflected
+    @inplace
     def __rshift__(self, other):
         return Thunk(operator.rshift, self, other)
-    __rrshift__ = __rshift__
-    __irshift__ = __rshift__
 
+    @reflected
+    @inplace
     def __and__(self, other):
         return Thunk(operator.and_, self, other)
-    __rand__ = __and__
-    __iand__ = __and__
 
+    @reflected
+    @inplace
     def __or__(self, other):
         return Thunk(operator.or_, self, other)
-    __ror__ = __or__
-    __ior__ = __or__
 
+    @reflected
+    @inplace
     def __xor__(self, other):
         return Thunk(operator.xor, self, other)
-    __rxor__ = __xor__
-    __ixor__ = __xor__
 
     def __int__(self):
         return int(self.strict)
