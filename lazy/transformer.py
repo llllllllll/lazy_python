@@ -6,7 +6,7 @@ from lazy.utils import isolate_namespace
 
 class DispatchMeta(type):
     """
-    Allows methods to dispatch to ast vist_* methods
+    Allows methods to dispatch to ast visit_* methods
     when they have been decorated with register_types.
     """
     def __new__(mcls, name, bases, dict_):
