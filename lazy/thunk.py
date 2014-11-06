@@ -265,7 +265,6 @@ class Thunk(object):
 
     def __copy__(self):
         return copy.copy(self.strict)
-    __deepcopy__ = __copy__
 
     def __deepcopy__(self, memodict={}):
-        return copy.copy(self)
+        return copy.deepcopy(self)
