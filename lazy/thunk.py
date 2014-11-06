@@ -249,7 +249,7 @@ class Thunk(object):
         return Thunk(self, *args, **kwargs)
 
     def __enter__(self):
-        return self.strict
+        return self.strict.__enter__()
 
     def __exit__(self, exc_type, exc_value, exc_tb):
         return self.strict.__exit__(exc_type, exc_value, exc_tb)
