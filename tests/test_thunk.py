@@ -1,4 +1,3 @@
-from functools import wraps
 import math
 import operator
 from six import with_metaclass
@@ -12,7 +11,7 @@ reflect_implicit = object()
 magic_class = object()
 
 
-class MagigTestDispatchMeta(type):
+class MagicTestDispatchMeta(type):
     def __new__(mcls, name, bases, dict_):
         for func, args in dict_.get('test_operators_lazy', ()):
             name = func.__name__
@@ -61,7 +60,7 @@ def call(f, *args, **kwargs):
     return f(*args, **kwargs)
 
 
-class ThunkTestCase(with_metaclass(MagigTestDispatchMeta, TestCase)):
+class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
     def test_laziness(self):
         def raiser():
             raise ValueError('raiser raised')
