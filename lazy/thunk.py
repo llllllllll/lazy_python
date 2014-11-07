@@ -111,6 +111,9 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
         # Compute the strict value.
         strict = function(*args, **kwargs)
+        while isinstance(strict, Thunk):
+            # Make sure that we have actually made this strict.
+            strict = _safegetattr(strict, 'strict')
 
         # memoize this computation.
         _safesetattr(self, '_compute', lambda: strict)
@@ -273,11 +276,14 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     def __dir__(self):
         return dir(self.strict)
 
-    def __getattribute__(self, name):
-        try:
-            return _safegetattr(self, name)
-        except AttributeError:
-            return getattr(self.strict, _maybe_strict(name))
+    def __getattr__(self, name):
+        if name == 'strict':
+            # Why does this fall through to here?
+            # shouldn't this be caught by __getattribute__ since it
+            # is a property?
+            return _safegetattr(self, 'strict')
+
+        return Thunk(getattr, self, name)
 
     def __setattr__(self, name, value):
         return _safesetattr(
@@ -291,13 +297,13 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return Thunk(len, self)
 
     def __getitem__(self, key):
-        return Thunk(operator.itemgetter(key), self.strict)
+        return Thunk(Thunk(operator.itemgetter, key), self)
 
-    def __setitem__(self, key,  value):
-        return Thunk(lambda: operator.setitem(self.strict, key, value))
+    def __setitem__(self, key, value):
+        self.strict[_maybe_strict(key)] = value
 
     def __delitem__(self, key):
-        return Thunk(lambda: operator.delitem(self.strict, key))
+        del self.strict[_maybe_strict(key)]
 
     def __iter__(self):
         return iter(self.strict)

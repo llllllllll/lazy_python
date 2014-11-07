@@ -15,7 +15,7 @@ def run_lazy(src, name='<string>', globals=None, locals=None):
     globals = _getframe().f_back.f_globals if globals is None else globals
     locals = _getframe().f_back.f_locals if locals is None else locals
 
-    # Add the thunk name.
+    # Add the names for Thunk to be used by the runtime environment.
     globals[optimus_prime.THUNK] = Thunk
     exec(code_obj, globals, locals)
 
