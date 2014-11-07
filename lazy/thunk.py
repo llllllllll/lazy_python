@@ -1,4 +1,3 @@
-import copy
 import math
 import operator
 from six import iteritems, itervalues, with_metaclass
@@ -38,7 +37,7 @@ def _safegetattr(obj, name, *default):
 
     This is used to get attributes internally.
     """
-    return object.__getattr__(obj, name, *default)
+    return object.__getattribute__(obj, name, *default)
 
 
 class MagicExpansionMeta(type):
@@ -96,7 +95,7 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         """
         The strict value. This computes the value and stores it.
         """
-        return self._compute()
+        return _safegetattr(self, '_compute')()
 
     def _compute(self):
         """
@@ -119,14 +118,15 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
     # Override all the sensible magic methods.
 
-    def __bases__(self):
-        return type(self.strict).__bases__
+    @property
+    def __class__(self):
+        return self.strict.__class__
 
     def __eq__(self, other):
         return Thunk(operator.eq, self, other)
 
     def __ne__(self, other):
-        return Thunk(operator.neq, self, other)
+        return Thunk(operator.ne, self, other)
 
     def __lt__(self, other):
         return Thunk(operator.lt, self, other)
@@ -143,7 +143,7 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     def __pos__(self):
         return Thunk(operator.pos, self)
 
-    def __neq__(self):
+    def __neg__(self):
         return Thunk(operator.neg, self)
 
     def __abs__(self):
@@ -188,6 +188,11 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     @inplace
     def __div__(self, other):
         return Thunk(operator.div, self, other)
+
+    @reflected
+    @inplace
+    def __truediv__(self, other):
+        return Thunk(operator.truediv, self, other)
 
     @reflected
     @inplace
@@ -268,14 +273,19 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     def __dir__(self):
         return dir(self.strict)
 
-    def __getattr__(self, name):
-        return Thunk(operator.attrgetter(name), self.strict)
+    def __getattribute__(self, name):
+        try:
+            return _safegetattr(self, name)
+        except AttributeError:
+            return getattr(self.strict, _maybe_strict(name))
 
     def __setattr__(self, name, value):
-        return Thunk(lambda: setattr(self.strict, name, value))
+        return _safesetattr(
+            self.strict, _maybe_strict(name), _maybe_strict(value),
+        )
 
     def __delattr__(self, name):
-        return Thunk(lambda: delattr(self.strict, name))
+        return delattr(self.strict, _maybe_strict(name))
 
     def __len__(self):
         return Thunk(len, self)
@@ -323,10 +333,4 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return Thunk(lambda: self.strict.__set__(instance, value))
 
     def __delete__(self, instance):
-        return Thunk(lambda: self.strict.__delete__(instance))
-
-    def __copy__(self):
-        return copy.copy(self.strict)
-
-    def __deepcopy__(self, memodict={}):
-        return copy.deepcopy(self)
+        return self.strict.__delete__(instance)
