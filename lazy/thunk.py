@@ -286,9 +286,7 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return Thunk(getattr, self, name)
 
     def __setattr__(self, name, value):
-        return _safesetattr(
-            self.strict, _maybe_strict(name), _maybe_strict(value),
-        )
+        setattr(self.strict, _maybe_strict(name), value)
 
     def __delattr__(self, name):
         return delattr(self.strict, _maybe_strict(name))
