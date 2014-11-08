@@ -102,7 +102,7 @@ class LazyContext(object):
         self._oldtrace = gettrace()
 
         if self._oldtrace is None:
-            # weee have not enabled tracing, set a fake tracer.
+            # we have not enabled tracing, set a fake tracer.
             settrace(_dummy_trace)
 
         # Set the trace function of the previous frame to be
