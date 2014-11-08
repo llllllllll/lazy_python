@@ -84,8 +84,6 @@ class LazyContext(object):
 
     This is a dirty hack, why am I doing this.
     """
-    _compiled = {}  # Cache of all the lazycontext's we have seen.
-
     def __init__(self):
         self._enter_lno = None
         self._exit_lno = None
