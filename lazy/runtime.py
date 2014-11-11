@@ -153,3 +153,18 @@ class LazyContext(object):
             pythonapi.PyFrame_LocalsToFast(py_object(prev_frame), c_int(1))
 
         return True
+
+
+try:
+    __IPYTHON__
+except NameError:
+    __IPYTHON__ = False
+
+
+if __IPYTHON__:
+
+    from IPython.core.magic import register_cell_magic
+
+    @register_cell_magic
+    def lazy(line, cell):
+        run_lazy(cell)
