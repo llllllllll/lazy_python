@@ -136,12 +136,14 @@ class LazyContext(object):
             # from this file.
             src = ''.join(f.readlines()[self._enter_lno:exit_lno])
 
+        # execute the body of the with statement as lazy python.
+        # the 'if True:\n' is prepended to get around the indendation
+        # of the body.
+        header = '\n' * prev_frame.f_lineno + 'if True:\n'
+
         try:
-            # execute the body of the with statement as lazy python.
-            # the 'if True:\n' is prepended to get around the indendation
-            # of the body.
             run_lazy(
-                'if True:\n' + src,
+                header + src,
                 name=filename,
                 globals=prev_frame.f_globals,
                 locals=prev_frame.f_locals,
