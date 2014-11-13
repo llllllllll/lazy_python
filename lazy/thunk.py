@@ -1,8 +1,8 @@
 import math
 import operator
-from six import iteritems, itervalues, with_metaclass
+from six import iteritems, itervalues, with_metaclass, PY2
 
-from lazy.utils import isolate_namespace
+from lazy.utils import isolate_namespace, is_dunder
 
 
 # Isolated attribute names.
@@ -253,7 +253,7 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return hex(self.strict)
 
     def __index__(self):
-        return Thunk(lambda: self.strict.__index__)
+        return self.strict.__index__()
 
     def __str__(self):
         return str(self.strict)
@@ -276,12 +276,14 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     def __dir__(self):
         return dir(self.strict)
 
-    def __getattr__(self, name):
-        if name == 'strict':
-            # Why does this fall through to here?
-            # shouldn't this be caught by __getattribute__ since it
-            # is a property?
-            return _safegetattr(self, 'strict')
+    def __getattribute__(self, name):
+        if name == '__init__':
+            # Special case the __init__ because Thunk needs to implement
+            # this in a non-recursive way.
+            return Thunk(getattr, self, name)
+
+        if name == 'strict' or is_dunder(name):
+            return _safegetattr(self, name)
 
         return Thunk(getattr, self, name)
 
@@ -338,3 +340,15 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
     def __delete__(self, instance):
         return self.strict.__delete__(instance)
+
+    def __prepare__(self, name, bases):
+        return self.strict.__prepare__(name, bases)
+
+    # PY2 support:
+    if PY2:
+        __nonzero__ = __bool__
+        # I can probably leave this; however, this is not the py2 convention.
+        del __bool__
+
+        def __coerce__(self, other):
+            return self.strict.__coerce__(other)

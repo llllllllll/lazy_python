@@ -1,6 +1,6 @@
 import math
 import operator
-from six import with_metaclass
+from six import with_metaclass, PY2
 from unittest import TestCase
 
 from lazy.thunk import Thunk
@@ -38,7 +38,6 @@ class MagicTestDispatchMeta(type):
 
 def _test_magic_func(f, name, args):
     def wrapper(self):
-        a = Thunk(object)
         a = Thunk(f, *args)
         with self.assertRaises(TypeError):
             a.strict
@@ -57,7 +56,17 @@ def class_factory(func):
 
 
 def call(f, *args, **kwargs):
+    """
+    Alias to make the metaclass magic defer to __call__.
+    """
     return f(*args, **kwargs)
+
+
+def nonzero(a):
+    """
+    Alias to make the metaclass magic work under py2.
+    """
+    return bool(a)
 
 
 class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
@@ -89,7 +98,7 @@ class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
         (round, ()),
         (math.floor, ()),
         (math.ceil, ()),
-        (math.trunc, ()),
+        (math.trunc, (magic_class,)),
         (operator.add, (int(),)),
         (operator.add, (reflect_implicit, int())),
         (operator.iadd, ()),
@@ -133,66 +142,15 @@ class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
         (complex, (magic_class,)),
         (oct, (magic_class,)),
         (hex, (magic_class,)),
+        (operator.index, (magic_class,)),
         (str, (magic_class,)),
         (bytes, (magic_class,)),
         (repr, (magic_class,)),
         (hash, (magic_class,)),
-        (bool, (magic_class,)),
+        (nonzero if PY2 else bool, (magic_class,)),
         (dir, (magic_class,)),
         (len, (magic_class,)),
         (iter, (magic_class,)),
         (reversed, (magic_class,)),
         (call, (magic_class,)),
     )
-
-    def test_eq_value(self):
-        a = Thunk(lambda: 2)
-        b = Thunk(lambda: 2)
-
-        self.assertEqual(a, b)
-
-        self.assertEqual(a, 2)
-        self.assertEqual(b, 2)
-
-    def test_ne_value(self):
-        a = Thunk(lambda: 2)
-        b = Thunk(lambda: 3)
-
-        self.assertNotEqual(a, b)
-
-        self.assertNotEqual(a, 3)
-        self.assertNotEqual(b, 2)
-
-    def test_lt_value(self):
-        a = Thunk(lambda: 2)
-        b = Thunk(lambda: 3)
-
-        self.assertLess(a, b)
-        self.assertLess(a, 3)
-
-    def test_gt_value(self):
-        a = Thunk(lambda: 2)
-        b = Thunk(lambda: 3)
-
-        self.assertGreater(b, a)
-        self.assertGreater(b, 2)
-
-    def test_le_value(self):
-        a = Thunk(lambda: 2)
-        b = Thunk(lambda: 3)
-        c = Thunk(lambda: 2)
-
-        self.assertLessEqual(a, b)
-        self.assertLessEqual(a, c)
-        self.assertLessEqual(a, 3)
-        self.assertLessEqual(a, 2)
-
-    def test_ge_value(self):
-        a = Thunk(lambda: 3)
-        b = Thunk(lambda: 2)
-        c = Thunk(lambda: 2)
-
-        self.assertGreaterEqual(a, b)
-        self.assertGreaterEqual(a, c)
-        self.assertGreaterEqual(a, 3)
-        self.assertGreaterEqual(a, 2)
