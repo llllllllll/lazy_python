@@ -1,9 +1,8 @@
 import ast
 from ctypes import pythonapi, c_int, py_object
-from inspect import getsource
+from inspect import getsourcelines
 from six import iteritems
 from sys import _getframe, settrace, gettrace
-from textwrap import dedent
 
 from lazy.transformer import LazyTransformer
 from lazy.thunk import Thunk
@@ -21,9 +20,28 @@ def run_lazy(src, name='<string>', globals=None, locals=None):
     exec(code_obj, globals, locals)
 
 
+def _fix_scope(src_lines, lines):
+    """
+    Fixes the 'scope' of some source code by prepending lines empty
+    lines and wrapping it in an 'if True:' if needed.
+    """
+    if src_lines[0].startswith((' ', '\t')):
+        header = ['if True:\n']
+    else:
+        header = ['\n']
+
+    return ''.join(['\n'] * (lines - 1) + header + src_lines)
+
+
 def lazy_function(f):
     """
     Makes a function lazy.
+
+    This is better thought of as a macro that transforms the _source code_
+    of the function.
+
+    WARNING: This depends on being able to find the source for a function.
+    Debuggers will blow up on lazy_functions.
     """
     # The list of names bound the this function.
     lazy_names = []
@@ -42,9 +60,10 @@ def lazy_function(f):
 
     # We need to purge all instances of THIS function from the decorator list
     # to prevent infinite recursion when we exec lazified code.
-    src = dedent(getsource(f))
+    src_lines, lno = getsourcelines(f)
     src = '\n'.join(
-        l for l in src.splitlines() if l not in lazy_names
+        l for l in _fix_scope(src_lines, lno).splitlines()
+        if l not in lazy_names
     )
 
     locals_ = {}
@@ -81,8 +100,16 @@ class LazyContext(object):
     """
     Context manager for creating a block of lazy code from within
     strict python.
-
     This is a dirty hack, why am I doing this.
+
+    WARNING: You cannot use LazyContext with other context managers.
+    If you want to use another context manager inside of a LazyContext,
+    do:
+
+    with LazyContext():
+        with OtherContext():
+            # code
+            pass
     """
     def __init__(self):
         self._enter_lno = None
@@ -98,12 +125,8 @@ class LazyContext(object):
         self._prevframe = prev_frame
         self._enter_lno = prev_frame.f_lineno
         self._exc = _LazyContextExit()
-        self._oldf_trace = prev_frame.f_trace
         self._oldtrace = gettrace()
-
-        if self._oldtrace is None:
-            # we have not enabled tracing, set a fake tracer.
-            settrace(_dummy_trace)
+        settrace(_dummy_trace)
 
         # Set the trace function of the previous frame to be
         # our exception raiser. This makes us jump over the body
@@ -120,8 +143,9 @@ class LazyContext(object):
     def __exit__(self, exc_type, exc_value, exc_tb):
         prev_frame = self._prevframe
 
-        # Reset the trace functions.
-        prev_frame.f_trace = self._oldf_trace
+        # we only need to reset the global trace function.
+        # Resetting the local trace function causes some strange
+        # behaviour with f_lineno.
         settrace(self._oldtrace)
 
         if exc_value is not self._exc:
@@ -131,24 +155,31 @@ class LazyContext(object):
 
         filename = prev_frame.f_code.co_filename
         exit_lno = prev_frame.f_lineno
+
         with open(filename) as f:
             # This slice _should_ exist since we grabbed them
             # from this file.
-            src = ''.join(f.readlines()[self._enter_lno:exit_lno])
+            src_lines = f.readlines()[self._enter_lno:exit_lno]
 
-        # execute the body of the with statement as lazy python.
-        # the 'if True:\n' is prepended to get around the indendation
-        # of the body.
-        header = '\n' * prev_frame.f_lineno + 'if True:\n'
+        locals_overrides = set()
+        globals_ = dict(prev_frame.f_globals)
+        for k, v in iteritems(prev_frame.f_locals):
+            if k in globals_:
+                locals_overrides.add(k)
+            globals_[k] = v
 
         try:
             run_lazy(
-                header + src,
+                _fix_scope(src_lines, self._enter_lno),
                 name=filename,
-                globals=prev_frame.f_globals,
+                globals=globals_,
                 locals=prev_frame.f_locals,
             )
         finally:
+            # update the globals
+            for k, v in iteritems(globals_):
+                if k not in locals_overrides:
+                    prev_frame.f_globals[k] = v
             # update the frame locals to account for the code we just executed.
             pythonapi.PyFrame_LocalsToFast(py_object(prev_frame), c_int(1))
 

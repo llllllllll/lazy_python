@@ -19,6 +19,23 @@ class LazyContextTestCase(TestCase):
 
         self.assertTrue(updated)
 
+    def test_lazy(self):
+        mutable = EmptyObject()
+
+        def impure_disgusting_function(a):
+            mutable.a = a
+
+        a = 5
+        with LazyContext():
+            impure_disgusting_function(a)
+
+        self.assertFalse(hasattr(mutable, 'a'))
+
+        with LazyContext():
+            impure_disgusting_function(a).strict
+
+        self.assertEquals(mutable.a, a)
+
     def test_locals_del(self):
         name_error = None
 
