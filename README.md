@@ -8,6 +8,9 @@ I will write this later...
 `lazy` is a module for making python
 [lazily evaluated](http://en.wikipedia.org/wiki/Lazy_evaluation) (kinda).
 
+`lazy` runs under python 2 and 3; however, more focus is being spent on full
+python 3 support.
+
 
 ## Why lazy? ##
 
