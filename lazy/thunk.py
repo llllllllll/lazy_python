@@ -344,6 +344,9 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     def __prepare__(self, name, bases):
         return self.strict.__prepare__(name, bases)
 
+    def __next__(self):
+        return Thunk(lambda: next(self.strict))
+
     # PY2 support:
     if PY2:
         __nonzero__ = __bool__
