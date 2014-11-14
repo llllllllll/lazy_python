@@ -98,6 +98,8 @@ deferred computation objects called `Thunk`s. Thunks wrap normal functions by
 not evaluating them until the value is needed. A `Thunk` wrapped function can
 accept `Thunk`s as arguments; this is how the tree is built.
 
+`Thunk`s represent the weak head normal form of an expression.
+
 
 ### `LazyTransformer` ###
 
@@ -129,6 +131,7 @@ the abstract syntax tree of normal python.
 The `LazyTransformer` will `Thunk`ify all terminal `Name` nodes with a context
 of `Load`, and all terminal nodes (`Int`, `Str`, `List`, etc...). This lets the
 normal python runtime construct the chain of computations.
+
 
 
 ## Gotchas ##
@@ -197,6 +200,14 @@ needed<sup>1</sup>.
 This might not be the case though, instead, I might have missed something and
 you are correct, it should be lazy. If you think I missed something, open an
 issue and I will try to address it as soon as possible.
+
+
+#### Some stateful thing is broken ####
+
+Sorry, you are using unmanaged state and lazy evaluation, you deserve
+this. `Thunks` cache the normal form so that calling strict the second time will
+refer to the cached value. If this depended on some stateful function, then it
+will not work as intended.
 
 
 #### I tried to do x with a `Thunk` and it broke! ####

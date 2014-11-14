@@ -74,6 +74,8 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
     """
     A defered computation.
     This can be used wherever a strict value is used (maybe?)
+
+    This represents the weak head normal form of an expression.
     """
     def __init__(self, function, *args, **kwargs):
         safesetattr(self, _function_name, function)
