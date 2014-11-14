@@ -1,4 +1,5 @@
 from lazy import data
+from lazy.seq import seq
 from lazy.thunk import Thunk
 from lazy.transformer import LazyTransformer
 from lazy.runtime import run_lazy, lazy_function, LazyContext
@@ -13,4 +14,5 @@ __all__ = [
     'Thunk',
     'data',
     'undefined',
+    'seq',
 ]

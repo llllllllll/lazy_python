@@ -29,16 +29,6 @@ def is_dunder(name):
     return name.startswith('__') and name.endswith('__')
 
 
-def strict(v):
-    """
-    Gets the strict value from a Thunk or concrete value.
-    """
-    try:
-        return v.strict
-    except AttributeError:
-        return v
-
-
 def singleton(cls):
     """
     Class decorator for creating singletons.

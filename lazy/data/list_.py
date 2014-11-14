@@ -1,8 +1,9 @@
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 
+from lazy.seq import strict
 from lazy.thunk import Thunk
-from lazy.utils import strict, singleton
+from lazy.utils import singleton
 
 
 class LazyList(with_metaclass(ABCMeta)):

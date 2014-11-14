@@ -3,12 +3,12 @@ import math
 import operator
 from six import iteritems, itervalues, with_metaclass, PY2
 
+from lazy.seq import strict
 from lazy.utils import (
     isolate_namespace,
     safesetattr,
     safegetattr,
     is_dunder,
-    strict,
 )
 
 
