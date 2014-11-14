@@ -1,13 +1,7 @@
 from unittest import TestCase
 
 from lazy.runtime import LazyContext
-
-
-class EmptyObject(object):
-    """
-    object with a __dict__.
-    """
-    pass
+from lazy.data.empty import EmptyObject
 
 
 class LazyContextTestCase(TestCase):

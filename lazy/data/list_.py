@@ -21,6 +21,10 @@ class LazyList(with_metaclass(ABCMeta)):
     def __len__(self, key):
         raise NotImplementedError('__len__')
 
+    @abstractmethod
+    def __iter__(self):
+        raise NotImplementedError('__iter__')
+
 # LazyLists are sort of like thunks.
 Thunk.register(LazyList)
 
@@ -39,6 +43,9 @@ class NilType(LazyList):
 
     def __len__(self):
         return 0
+
+    def __iter__(self):
+        return iter(())
 
 nil = NilType()
 
@@ -69,3 +76,9 @@ class Cons(LazyList):
 
     def __len__(self):
         return len(self.strict)
+
+    def __iter__(self):
+        a = self
+        while not isinstance(a, NilType):
+            yield a._car
+            a = a._cdr

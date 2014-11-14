@@ -40,7 +40,11 @@ def singleton(cls):
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = old_new(cls, *args, **kwargs)
+            if cls.__new__ is not object.__new__:
+                cls._instance = old_new(cls)
+            else:
+                cls._instance = old_new(cls, *args, **kwargs)
+
         return cls._instance
 
     if PY2:
