@@ -1,3 +1,5 @@
+from functools import partial
+from six import PY2
 from uuid import uuid4
 
 
@@ -40,6 +42,9 @@ def singleton(cls):
         if cls._instance is None:
             cls._instance = old_new(cls, *args, **kwargs)
         return cls._instance
+
+    if PY2:
+        __new__ = partial(__new__, cls)
 
     cls.__new__ = __new__
     return cls
