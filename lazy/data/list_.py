@@ -17,6 +17,10 @@ class LazyList(with_metaclass(ABCMeta)):
     def __getitem__(self, key):
         raise NotImplementedError('__getitem__')
 
+    @abstractmethod
+    def __len__(self, key):
+        raise NotImplementedError('__len__')
+
 # LazyLists are sort of like thunks.
 Thunk.register(LazyList)
 
@@ -33,6 +37,9 @@ class NilType(LazyList):
     def __getitem__(self, key):
         raise IndexError('LazyList index out of range')
 
+    def __len__(self):
+        return 0
+
 nil = NilType()
 
 
@@ -46,13 +53,19 @@ class Cons(LazyList):
         return self._normal_form()
 
     def _normal_form(self):
-        ns = (strict(self._car),) + strict(self._cdr)
+        ns = (self._car,) + strict(self._cdr)
         self._normal_form = lambda: ns
         return ns
 
     def __getitem__(self, key):
         key = strict(key.__index__())
+        if key < 0:
+            key = len(self) + key
+
         if key == 0:
             return self._car
         else:
             return self._cdr[key - 1]
+
+    def __len__(self):
+        return len(self.strict)
