@@ -1,8 +1,15 @@
+from abc import ABCMeta
 import math
 import operator
 from six import iteritems, itervalues, with_metaclass, PY2
 
-from lazy.utils import isolate_namespace, is_dunder
+from lazy.utils import (
+    isolate_namespace,
+    safesetattr,
+    safegetattr,
+    is_dunder,
+    strict,
+)
 
 
 # Isolated attribute names.
@@ -11,36 +18,7 @@ _args_name = isolate_namespace('_args')
 _kwargs_name = isolate_namespace('_kwargs')
 
 
-def _maybe_strict(v):
-    """
-    Gets the strict value from a Thunk or concrete value.
-    """
-    if isinstance(v, Thunk):
-        return v.strict
-    return v
-
-
-def _safesetattr(obj, attr, value):
-    """
-    Because we are overriding __setattr__, we need a
-    non-recursive way of setting attributes.
-
-    This is to be used to set attributes internally.
-    """
-    object.__setattr__(obj, attr, value)
-
-
-def _safegetattr(obj, name, *default):
-    """
-    Because we are overridding __getattr__, we need a
-    non-recursive way of getting attributes.
-
-    This is used to get attributes internally.
-    """
-    return object.__getattribute__(obj, name, *default)
-
-
-class MagicExpansionMeta(type):
+class MagicExpansionMeta(ABCMeta):
     """
     A metaclass for expanding the @reflected and @inplace decorators.
     """
@@ -50,12 +28,14 @@ class MagicExpansionMeta(type):
             for alias in aliases:
                 dict_[alias] = v
 
-        return type.__new__(mcls, name, bases, dict_)
+        return super(MagicExpansionMeta, mcls).__new__(
+            mcls, name, bases, dict_,
+        )
 
 
 def _alias(f, prefix):
     name = f.__name__
-    if not (name.startswith('__') and name.endswith('__')):
+    if not is_dunder(name):
         raise ValueError('%s must be a dunder method' % name)
 
     name = name[2:-2]
@@ -80,48 +60,60 @@ def inplace(f):
     return f
 
 
+def strict_lookup(m):
+    """
+    Decorator that says that this method needs to be looked up
+    strictly.
+    """
+    strict_lookup.strict_names.add(m.__name__)
+    return m
+strict_lookup.strict_names = set()
+
+
 class Thunk(with_metaclass(MagicExpansionMeta)):
     """
     A defered computation.
     This can be used wherever a strict value is used (maybe?)
     """
     def __init__(self, function, *args, **kwargs):
-        _safesetattr(self, _function_name, function)
-        _safesetattr(self, _args_name, args)
-        _safesetattr(self, _kwargs_name, kwargs)
+        safesetattr(self, _function_name, function)
+        safesetattr(self, _args_name, args)
+        safesetattr(self, _kwargs_name, kwargs)
 
     @property
+    @strict_lookup
     def strict(self):
         """
         The strict value. This computes the value and stores it.
         """
-        return _safegetattr(self, '_compute')()
+        return safegetattr(self, '_normal_form')()
 
-    def _compute(self):
+    def _normal_form(self):
         """
-        Actually get the value and store it.
+        Return the normal form of the thunk.
         """
         # Strictly evaluate the args and kwargs.
-        args = [_maybe_strict(arg) for arg in _safegetattr(self, _args_name)]
-        kwargs = {k: _maybe_strict(v)
-                  for k, v in iteritems(_safegetattr(self, _kwargs_name))}
+        args = [strict(arg) for arg in safegetattr(self, _args_name)]
+        kwargs = {k: strict(v)
+                  for k, v in iteritems(safegetattr(self, _kwargs_name))}
 
         # The function could be a Thunk too, like (a + b)(arg)
-        function = _maybe_strict(_safegetattr(self, _function_name))
+        function = strict(safegetattr(self, _function_name))
 
         # Compute the strict value.
-        strict = function(*args, **kwargs)
-        while isinstance(strict, Thunk):
+        normal_form = function(*args, **kwargs)
+        while isinstance(normal_form, Thunk):
             # Make sure that we have actually made this strict.
-            strict = _safegetattr(strict, 'strict')
+            normal_form = safegetattr(normal_form, 'strict')
 
         # memoize this computation.
-        _safesetattr(self, '_compute', lambda: strict)
-        return strict
+        safesetattr(self, '_normal_form', lambda: strict)
+        return normal_form
 
     # Override all the sensible magic methods.
 
     @property
+    @strict_lookup
     def __class__(self):
         return self.strict.__class__
 
@@ -277,21 +269,16 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return dir(self.strict)
 
     def __getattribute__(self, name):
-        if name == '__init__':
-            # Special case the __init__ because Thunk needs to implement
-            # this in a non-recursive way.
-            return Thunk(getattr, self, name)
-
-        if name == 'strict' or is_dunder(name):
-            return _safegetattr(self, name)
+        if name in strict_lookup.strict_names:
+            return safegetattr(self, name)
 
         return Thunk(getattr, self, name)
 
     def __setattr__(self, name, value):
-        setattr(self.strict, _maybe_strict(name), value)
+        setattr(self.strict, strict(name), value)
 
     def __delattr__(self, name):
-        return delattr(self.strict, _maybe_strict(name))
+        return delattr(self.strict, strict(name))
 
     def __len__(self):
         return Thunk(len, self)
@@ -300,10 +287,10 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         return Thunk(Thunk(operator.itemgetter, key), self)
 
     def __setitem__(self, key, value):
-        self.strict[_maybe_strict(key)] = value
+        self.strict[strict(key)] = value
 
     def __delitem__(self, key):
-        del self.strict[_maybe_strict(key)]
+        del self.strict[strict(key)]
 
     def __iter__(self):
         return iter(self.strict)
@@ -319,9 +306,6 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
     def __instancecheck__(self, instance):
         return Thunk(lambda: isinstance(instance, self.strict))
-
-    def __subclasscheck__(self, subclass):
-        return Thunk(lambda: issubclass(subclass, self.strict))
 
     def __call__(self, *args, **kwargs):
         return Thunk(self, *args, **kwargs)
