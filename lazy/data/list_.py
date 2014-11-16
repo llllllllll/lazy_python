@@ -6,6 +6,7 @@ from lazy.thunk import Thunk
 from lazy.utils import singleton
 
 
+@Thunk.register
 class LazyList(with_metaclass(ABCMeta)):
     def __repr__(self):
         return repr(self.strict)
@@ -24,9 +25,6 @@ class LazyList(with_metaclass(ABCMeta)):
     @abstractmethod
     def __iter__(self):
         raise NotImplementedError('__iter__')
-
-# LazyLists are sort of like thunks.
-Thunk.register(LazyList)
 
 
 @singleton

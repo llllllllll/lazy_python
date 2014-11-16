@@ -2,6 +2,7 @@ from lazy.thunk import Thunk
 from lazy.utils import singleton
 
 
+@Thunk.register
 @singleton
 class UndefinedValue(Exception):
     """
@@ -16,6 +17,5 @@ class UndefinedValue(Exception):
         return 'undefined'
     __repr__ = __str__
 
-Thunk.register(UndefinedValue)
 
 undefined = UndefinedValue()
