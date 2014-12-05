@@ -1,7 +1,7 @@
 from abc import ABCMeta
 import math
 import operator
-from six import iteritems, itervalues, with_metaclass, PY2
+from six import iteritems, with_metaclass, PY2
 
 from lazy.seq import strict
 from lazy.utils import (
@@ -18,17 +18,32 @@ _args_name = isolate_namespace('_args')
 _kwargs_name = isolate_namespace('_kwargs')
 
 
-class MagicExpansionMeta(ABCMeta):
+class ThunkMeta(ABCMeta):
     """
     A metaclass for expanding the @reflected and @inplace decorators.
     """
     def __new__(mcls, name, bases, dict_):
-        for v in itervalues(dict(dict_)):
+        strict_names = set()
+        for k, v in iteritems(dict(dict_)):
+            if isinstance(v, strict_lookup):
+                strict_names.add(k)
+                v = v.m
+                dict_[k] = v
+
             aliases = getattr(v, '_aliases', ())
             for alias in aliases:
                 dict_[alias] = v
 
-        return super(MagicExpansionMeta, mcls).__new__(
+        # construct this here to close over the strict names.
+        def __getattribute__(self, name):
+            if name in strict_names:
+                return safegetattr(self, name)
+
+            return Thunk(getattr, self, name)
+
+        dict_['__getattribute__'] = __getattribute__
+
+        return super(ThunkMeta, mcls).__new__(
             mcls, name, bases, dict_,
         )
 
@@ -60,17 +75,16 @@ def inplace(f):
     return f
 
 
-def strict_lookup(m):
+class strict_lookup(object):
     """
     Decorator that says that this method needs to be looked up
     strictly.
     """
-    strict_lookup.strict_names.add(m.__name__)
-    return m
-strict_lookup.strict_names = set()
+    def __init__(self, m):
+        self.m = m
 
 
-class Thunk(with_metaclass(MagicExpansionMeta)):
+class Thunk(with_metaclass(ThunkMeta)):
     """
     A defered computation.
     This can be used wherever a strict value is used (maybe?)
@@ -82,8 +96,8 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
         safesetattr(self, _args_name, args)
         safesetattr(self, _kwargs_name, kwargs)
 
-    @property
     @strict_lookup
+    @property
     def strict(self):
         """
         The strict value. This computes the value and stores it.
@@ -114,8 +128,8 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
     # Override all the sensible magic methods.
 
-    @property
     @strict_lookup
+    @property
     def __class__(self):
         return self.strict.__class__
 
@@ -269,12 +283,6 @@ class Thunk(with_metaclass(MagicExpansionMeta)):
 
     def __dir__(self):
         return dir(self.strict)
-
-    def __getattribute__(self, name):
-        if name in strict_lookup.strict_names:
-            return safegetattr(self, name)
-
-        return Thunk(getattr, self, name)
 
     def __setattr__(self, name, value):
         setattr(self.strict, strict(name), value)
