@@ -1,8 +1,12 @@
 #!/usr/bin/env python
-from setuptools import setup, find_packages
+from distutils.core import Extension, setup
+import sys
 
-with open('README.md') as f:
-    long_description = f.read()
+long_description = ''
+
+if 'upload' in sys.argv:
+    with open('README.md') as f:
+        long_description = f.read()
 
 setup(
     name='lazy',
@@ -10,7 +14,9 @@ setup(
     description='Lazy evaluation for python',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
-    packages=find_packages(),
+    packages=[
+        'lazy',
+    ],
     long_description=long_description,
     license='GPL-2',
     classifiers=[
@@ -24,5 +30,10 @@ setup(
     install_requires=[
         'six',
     ],
-    url="https://github.com/llllllllll/lazy_python"
+    url='https://github.com/llllllllll/lazy_python',
+    ext_modules=[
+        Extension('lazy._undefined', ['lazy/_undefined.c']),
+        Extension('lazy._thunk', ['lazy/_thunk.c'],
+                  extra_compile_args=['-O0']),
+    ],
 )
