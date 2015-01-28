@@ -1,7 +1,5 @@
 # `lazy` #
 
-[![build status](https://travis-ci.org/llllllllll/lazy_python.svg?branch=master)](https://travis-ci.org/llllllllll/lazy_python)
-
 I will write this later...
 
 
@@ -10,8 +8,7 @@ I will write this later...
 `lazy` is a module for making python
 [lazily evaluated](http://en.wikipedia.org/wiki/Lazy_evaluation) (kinda).
 
-`lazy` runs under python 2 and 3; however, more focus is being spent on full
-python 3 support.
+`lazy` runs under python 3.5.
 
 
 ## Why lazy? ##
@@ -23,11 +20,10 @@ combining them is double cool.
 
 ## How to lazy? ##
 
-There are 3 means of using lazy code:
+There are 2 means of using lazy code:
 
 1. `run_lazy`
 1. `lazy_function`
-1. `LazyContext`
 
 
 #### `run_lazy` ####
@@ -42,7 +38,7 @@ Example:
 ```python
 >>> code = """
 print('not lazy')
-print('lazy').strict
+strict(print('lazy'))
 """
 >>> run_lazy(code)
 lazy
@@ -53,7 +49,7 @@ lazy
 
 We can also use the `lazy_function` decorator. This is a hackier approach,
 not that any is very good. Functions constructed with the `lazy_function`
-decorator will return `Thunk` objects which will be the deferred computation for
+decorator will return `thunk` objects which will be the deferred computation for
 the function. Internally, things are kept lazy. Arguments will still be computed
 with the strictness of the calling scope.
 
@@ -69,7 +65,7 @@ def f(a, b):
     return a + b
 ```
 
-Calling f(1, 2) will return a `Thunk` that will add 1 and 2 when it needs to be
+Calling f(1, 2) will return a `thunk` that will add 1 and 2 when it needs to be
 strict. Doing anything with the returned thunk will keep chaining on more
 computations until it must be strictly evaluated.
 
@@ -84,21 +80,21 @@ Examples:
 ```python
 with LazyContext():
     print('lazy')
-    print('strict').strict
+    strict(print('strict'))
 ```
 
 This only prints 'strict'.
 
 
 
-### `Thunk` ###
+### `thunk` ###
 
 At it's core, lazy is just a way of converting expressions into a tree of
-deferred computation objects called `Thunk`s. Thunks wrap normal functions by
-not evaluating them until the value is needed. A `Thunk` wrapped function can
-accept `Thunk`s as arguments; this is how the tree is built.
+deferred computation objects called `thunk`s. thunks wrap normal functions by
+not evaluating them until the value is needed. A `thunk` wrapped function can
+accept `thunk`s as arguments; this is how the tree is built.
 
-`Thunk`s represent the weak head normal form of an expression.
+`thunk`s represent the weak head normal form of an expression.
 
 
 ### `LazyTransformer` ###
@@ -106,13 +102,13 @@ accept `Thunk`s as arguments; this is how the tree is built.
 While we can manually write:
 
 ```python
-Thunk(
+thunk(
     operator.add,
-    Thunk(lambda: 2),
-    Thunk(
+    thunk(lambda: 2),
+    thunk(
         f,
-        Thunk(lambda: a),
-        Thunk(lambda: b),
+        thunk(lambda: a),
+        thunk(lambda: b),
     ),
 )
 ```
@@ -128,9 +124,38 @@ What we probably wanted to write was:
 To make this conversion, the `LazyTransformer` makes the needed corrections to
 the abstract syntax tree of normal python.
 
-The `LazyTransformer` will `Thunk`ify all terminal `Name` nodes with a context
+The `LazyTransformer` will `thunk`ify all terminal `Name` nodes with a context
 of `Load`, and all terminal nodes (`Int`, `Str`, `List`, etc...). This lets the
 normal python runtime construct the chain of computations.
+
+
+## Custom Strictness Properties ##
+
+`strict` is actually a type that cannot be put into a `thunk`. For example:
+
+```python
+>>> type(thunk(strict, 2))
+int
+```
+
+Notice that this is not a thunk, and has been strictly evaluated.
+
+To create custom strict objects, you can subclass `strict`. This prevents the
+object from getting wrapped in thunks allowing you to create strict data
+structures.
+
+Objects may also define a `__strict__` attribute that defines how to strictly
+evalueate the object. For example, `undefined` can be defined as:
+
+```python
+class StrictFive(object):
+    @property
+    def __strict__(self):
+        return 5
+```
+
+This would make `strict(StrictFive())` return 5 instead of an instance of
+`StrictFive`.
 
 
 
@@ -145,9 +170,9 @@ is. The repl will implicitly call `repr` on things to display them. We can see
 that this is a thunk by doing:
 
 ```python
->>> a = Thunk(operator.add, 2, 3)
+>>> a = thunk(operator.add, 2, 3)
 >>> type(a)
-lazy.thunk.Thunk
+lazy.thunk.thunk
 >>> a
 5
 ```
@@ -176,13 +201,13 @@ The solution is to force a dependency:
 ```python
 @lazy_function
 def f(a, b):
-    print('printing the sum of %s and %s' % (a, b)).strict
+    strict(print('printing the sum of %s and %s' % (a, b)))
     return a + b
 ```
 
-`strict` is a property of a `Thunk` that forces the value (and caches it).
+`strict` is a function that is used to strictly evaluate things.
 Because the body of the function is interpreted as lazy python, the function
-call is converted into a `Thunk`, and therefore we can `strict` it.
+call is converted into a `thunk`, and therefore we can `strict` it.
 
 This is true for _any_ side-effectful function call.
 
@@ -205,12 +230,12 @@ issue and I will try to address it as soon as possible.
 #### Some stateful thing is broken ####
 
 Sorry, you are using unmanaged state and lazy evaluation, you deserve
-this. `Thunks` cache the normal form so that calling strict the second time will
+this. `thunks` cache the normal form so that calling strict the second time will
 refer to the cached value. If this depended on some stateful function, then it
 will not work as intended.
 
 
-#### I tried to do x with a `Thunk` and it broke! ####
+#### I tried to do x with a `thunk` and it broke! ####
 
 The library is probably broken. This was written on a whim and I barely thought
 through the use cases.
@@ -221,5 +246,5 @@ Please open an issue and I will try to get back to you as soon as possible.
 ### Notes ###
 
 1. The function call for the constructor will be made lazy in the
-   `LazyTransformer` (like `Thunk(int, your_thunk)`), so while this is a place
+   `LazyTransformer` (like `thunk(int, your_thunk)`), so while this is a place
    where strictness is needed, it can still be 'optimized' away.

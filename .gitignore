@@ -43,8 +43,6 @@ nosetests.xml
 *.o
 *.so
 *.out
-# git add -f if needed
-*.c
 
 # Vim
 *.swp

@@ -1,19 +1,16 @@
 from lazy import data
-from lazy.seq import seq, strict
-from lazy.thunk import Thunk
+from lazy._thunk import thunk, strict
 from lazy.transformer import LazyTransformer
-from lazy.runtime import run_lazy, lazy_function, LazyContext
-from lazy.undefined import undefined
+from lazy.runtime import run_lazy, lazy_function
+from lazy._undefined import undefined
 
 
 __all__ = [
     'LazyTransformer',
     'run_lazy',
     'lazy_function',
-    'LazyContext',
-    'Thunk',
+    'thunk',
     'data',
     'undefined',
-    'seq',
     'strict',
 ]

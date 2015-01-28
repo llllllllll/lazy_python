@@ -8,5 +8,5 @@ class UndefinedTestCase(TestCase):
         undefined
 
     def test_cannot_strict(self):
-        with self.assertRaises(undefined.__class__):
+        with self.assertRaises(undefined):
             strict(undefined)

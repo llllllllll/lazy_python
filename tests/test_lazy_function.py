@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from lazy import Thunk, lazy_function
+from lazy import thunk, lazy_function
 
 
 @lazy_function
@@ -10,7 +10,7 @@ def f(a, b):
 
 class LazyFunctionTestCase(TestCase):
     def test_is_lazy(self):
-        self.assertIsInstance(f(1, 2), Thunk)
+        self.assertIsInstance(f(1, 2), thunk)
 
     def test_not_decorator(self):
         def g(a, b):
@@ -18,4 +18,4 @@ class LazyFunctionTestCase(TestCase):
 
         g = lazy_function(g)
 
-        self.assertIsInstance(g(1, 2), Thunk)
+        self.assertIsInstance(g(1, 2), thunk)

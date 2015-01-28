@@ -1,9 +1,8 @@
 import math
 import operator
-from six import with_metaclass, PY2
 from unittest import TestCase
 
-from lazy.thunk import Thunk
+from lazy import thunk, strict
 
 
 no_implicit_thunk = object()
@@ -24,11 +23,11 @@ class MagicTestDispatchMeta(type):
             if first_arg is no_implicit_thunk:
                 args = args[1:]
             elif first_arg is reflect_implicit:
-                args = args[1:] + (Thunk(object),)
+                args = args[1:] + (thunk(object),)
             elif first_arg is magic_class:
                 args = (class_factory(func)(),)
             else:
-                args = (Thunk(object),) + args[1:]
+                args = (thunk(object),) + args[1:]
 
             full_name = 'test_%s_lazy' % name
             dict_[full_name] = _test_magic_func(func, full_name, args)
@@ -38,9 +37,9 @@ class MagicTestDispatchMeta(type):
 
 def _test_magic_func(f, name, args):
     def wrapper(self):
-        a = Thunk(f, *args)
+        a = thunk(f, *args)
         with self.assertRaises(TypeError):
-            a.strict
+            strict(a)
 
     wrapper.__name__ = name
     return wrapper
@@ -69,28 +68,28 @@ def nonzero(a):
     return bool(a)
 
 
-class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
+class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
     def test_laziness(self):
         def raiser():
             raise ValueError('raiser raised')
 
-        a = Thunk(raiser)
+        a = thunk(raiser)
 
         with self.assertRaises(ValueError):
-            a.strict
+            strict(a)
 
     def test_isinstance_strict(self):
-        thunk = Thunk(lambda: 2)
-        self.assertIsInstance(thunk, int)
-        self.assertIsInstance(thunk, Thunk)
+        th = thunk(lambda: 2)
+        self.assertIsInstance(th, int)
+        self.assertIsInstance(th, thunk)
 
     test_operators_lazy = (
-        (operator.eq, (Thunk(object),)),
-        (operator.ne, (Thunk(object),)),
-        (operator.lt, (Thunk(object),)),
-        (operator.gt, (Thunk(object),)),
-        (operator.le, (Thunk(object),)),
-        (operator.ge, (Thunk(object),)),
+        (operator.eq, (thunk(object),)),
+        (operator.ne, (thunk(object),)),
+        (operator.lt, (thunk(object),)),
+        (operator.gt, (thunk(object),)),
+        (operator.le, (thunk(object),)),
+        (operator.ge, (thunk(object),)),
         (operator.pos, ()),
         (operator.neg, ()),
         (abs, ()),
@@ -147,7 +146,7 @@ class ThunkTestCase(with_metaclass(MagicTestDispatchMeta, TestCase)):
         (bytes, (magic_class,)),
         (repr, (magic_class,)),
         (hash, (magic_class,)),
-        (nonzero if PY2 else bool, (magic_class,)),
+        (bool, (magic_class,)),
         (dir, (magic_class,)),
         (len, (magic_class,)),
         (iter, (magic_class,)),
