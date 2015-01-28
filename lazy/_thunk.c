@@ -42,7 +42,7 @@ PyDoc_STRVAR(callablewrapper_doc, "A wrapper for a c functions.");
 
 static PyTypeObject binwrapper_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.unarywrapper",                 /* tp_name */
+    "lazy._thunk.binwrapper",                   /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
     0,                                          /* tp_dealloc */
@@ -275,7 +275,6 @@ static PyObject *strict_eval(PyObject*);
 static PyObject *
 _strict_eval_borrowed(PyObject *self)
 {
-    thunk *th = (thunk*) self;
     PyObject *normal_func;
     PyObject *normal_args;
     PyObject *normal_kwargs;
@@ -285,19 +284,20 @@ _strict_eval_borrowed(PyObject *self)
     PyObject *key;
     PyObject *value;
 
-    if (!th->th_normal) {
-        if (!(normal_func = strict_eval(th->th_func))) {
+    if (!((thunk*) self)->th_normal) {
+        if (!(normal_func = strict_eval(((thunk*) self)->th_func))) {
             return NULL;
         }
 
-        nargs = PyTuple_GET_SIZE(th->th_args);
+        nargs = PyTuple_GET_SIZE(((thunk*) self)->th_args);
         if (!(normal_args = PyTuple_New(nargs))) {
             Py_DECREF(normal_func);
             return NULL;
         }
 
         for (n = 0;n < nargs;++n) {
-            if (!(arg = strict_eval(PyTuple_GET_ITEM(th->th_args, n)))) {
+            if (!(arg = strict_eval(
+                      PyTuple_GET_ITEM(((thunk*) self)->th_args, n)))) {
                 Py_DECREF(normal_func);
                 Py_DECREF(normal_args);
                 return NULL;
@@ -305,8 +305,8 @@ _strict_eval_borrowed(PyObject *self)
             PyTuple_SET_ITEM(normal_args, n, arg);
         }
 
-        if (th->th_kwargs) {
-            if (!(normal_kwargs = PyDict_Copy(th->th_kwargs))) {
+        if (((thunk*) self)->th_kwargs) {
+            if (!(normal_kwargs = PyDict_Copy(((thunk*) self)->th_kwargs))) {
                 Py_DECREF(normal_func);
                 Py_DECREF(normal_args);
                 return NULL;
@@ -328,21 +328,23 @@ _strict_eval_borrowed(PyObject *self)
             normal_kwargs = NULL;
         }
 
-        th->th_normal = PyObject_Call(normal_func, normal_args, normal_kwargs);
+        ((thunk*) self)->th_normal = PyObject_Call(normal_func,
+                                                   normal_args,
+                                                   normal_kwargs);
         Py_DECREF(normal_func);
         Py_DECREF(normal_args);
         Py_XDECREF(normal_kwargs);
-        if (!th->th_normal) {
+        if (!((thunk*) self)->th_normal) {
             return NULL;
         }
         /* Remove the references to the function and args to not persist
            these references. */
-        Py_CLEAR(th->th_func);
-        Py_CLEAR(th->th_args);
-        Py_CLEAR(th->th_kwargs);
+        Py_CLEAR(((thunk*) self)->th_func);
+        Py_CLEAR(((thunk*) self)->th_args);
+        Py_CLEAR(((thunk*) self)->th_kwargs);
     }
 
-    return th->th_normal;
+    return ((thunk*) self)->th_normal;
 }
 
 static PyTypeObject strict_type;
@@ -359,9 +361,16 @@ strict_eval(PyObject *th)
             return NULL;
         }
     }
-    else {
-        normal = th;
+    else if (!(normal = PyObject_GetAttrString(th, "__strict__"))) {
+        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+            normal = th;
+        }
+        else {
+            return NULL;
+        }
     }
+
     Py_INCREF(normal);
     return normal;
 }
@@ -369,7 +378,7 @@ strict_eval(PyObject *th)
 static PyObject *
 strict_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 {
-    static const char * const keywords[] = {"thunk", NULL};
+    static const char * const keywords[] = {"expr", NULL};
     PyObject *th;
 
     if (!PyArg_ParseTupleAndKeywords(args,
@@ -430,11 +439,11 @@ static PyTypeObject strict_type = {
 
 static void
 thunk_dealloc(thunk *self){
-    Py_XDECREF(self->th_func);
-    Py_XDECREF(self->th_args);
-    Py_XDECREF(self->th_kwargs);
-    Py_XDECREF(self->th_normal);
-    PyMem_Del((PyObject*) self);
+    /* Py_XDECREF(self->th_func); */
+    /* Py_XDECREF(self->th_args); */
+    /* Py_XDECREF(self->th_kwargs); */
+    /* Py_XDECREF(self->th_normal); */
+    /* PyMem_Del((PyObject*) self); */
 }
 
 /* Create a thunk without checking if `func` is a strict type.
@@ -454,6 +463,7 @@ _thunk_new_no_check(PyObject *func, PyObject *args, PyObject *kwargs)
     self->th_args = args;
     Py_XINCREF(kwargs);
     self->th_kwargs = kwargs;
+    self->th_normal = NULL;
     return (PyObject*) self;
 }
 
@@ -462,60 +472,54 @@ _thunk_new_no_check(PyObject *func, PyObject *args, PyObject *kwargs)
 static PyObject *
 thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 {
-    static const char * const keywords[] = {"func", "args", "kwargs", NULL};
     PyObject *th_func;
     PyObject *th_args = NULL;
-    PyObject *th_kwargs = NULL;
-    bool free_args;
+    Py_ssize_t nargs;
+    Py_ssize_t n;
     PyObject *tmp;
     PyObject *ret;
 
-    if (!PyArg_ParseTupleAndKeywords(args,
-                                     kwargs,
-                                     "O|OO:thunk",
-                                     (char**) keywords,
-                                     &th_func,
-                                     &th_args,
-                                     &th_kwargs)) {
+    nargs = PyTuple_GET_SIZE(args);
+    if (nargs < 1) {
+        PyErr_SetString(PyExc_TypeError, "Missing callable argument");
         return NULL;
     }
+
+    th_func = PyTuple_GET_ITEM(args, 0);
 
     if (!PyCallable_Check(th_func)) {
         PyErr_SetString(PyExc_ValueError, "func must be callable");
         return NULL;
     }
 
-    if (!th_args) {
-        if (!(th_args = PyTuple_New(0))) {
-            return NULL;
-        }
-        free_args = true;
+    if (!(th_args = PyTuple_New(nargs - 1))) {
+        return NULL;
+    }
+
+    for (n = 0;n < nargs - 1;++n) {
+        tmp = PyTuple_GET_ITEM(args, n + 1);
+        Py_INCREF(tmp);
+        PyTuple_SET_ITEM(th_args, n, tmp);
     }
 
     if (PyObject_IsInstance(th_func, (PyObject*) &PyType_Type) &&
         PyObject_IsSubclass(th_func, (PyObject*) &strict_type)) {
 
         /* Strict types get evaluated strictly. */
-        if (!(tmp = PyTuple_Pack(1, th_args))) {
-            return NULL;
-        }
-        ret =  PyObject_Call(th_func, tmp, th_kwargs);
-        Py_DECREF(tmp);
+        ret = PyObject_Call(th_func, th_args, kwargs);
     }
     else {
-        ret = _thunk_new_no_check(th_func, th_args, th_kwargs);
+        ret = _thunk_new_no_check(th_func, th_args, kwargs);
     }
 
-    if (free_args) {
-        Py_DECREF(th_args);
-    }
+    Py_DECREF(th_args);
 
     return ret;
 }
 
 
 /* Binary operators --------------------------------------------------------- */
-#define thunk_binop(name, func)                                         \
+#define THUNK_BINOP(name, func)                                         \
     static PyObject *                                                   \
     name(PyObject *a, PyObject *b)                                      \
     {                                                                   \
@@ -564,45 +568,45 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
         return ret;                                                     \
     }
 
-thunk_binop(thunk_add, PyNumber_Add)
-thunk_binop(thunk_sub, PyNumber_Subtract)
-thunk_binop(thunk_mul, PyNumber_Multiply)
-thunk_binop(thunk_matmul, PyNumber_MatrixMultiply)
-thunk_binop(thunk_floordiv, PyNumber_FloorDivide)
-thunk_binop(thunk_truediv, PyNumber_TrueDivide)
-thunk_binop(thunk_rem, PyNumber_Remainder)
-thunk_binop(thunk_divmod, PyNumber_Divmod)
-thunk_binop(thunk_lshift, PyNumber_Lshift)
-thunk_binop(thunk_rshift, PyNumber_Rshift)
-thunk_binop(thunk_and, PyNumber_And)
-thunk_binop(thunk_xor, PyNumber_Xor)
-thunk_binop(thunk_or, PyNumber_Or)
+THUNK_BINOP(thunk_add, PyNumber_Add)
+THUNK_BINOP(thunk_sub, PyNumber_Subtract)
+THUNK_BINOP(thunk_mul, PyNumber_Multiply)
+THUNK_BINOP(thunk_matmul, PyNumber_MatrixMultiply)
+THUNK_BINOP(thunk_floordiv, PyNumber_FloorDivide)
+THUNK_BINOP(thunk_truediv, PyNumber_TrueDivide)
+THUNK_BINOP(thunk_rem, PyNumber_Remainder)
+THUNK_BINOP(thunk_divmod, PyNumber_Divmod)
+THUNK_BINOP(thunk_lshift, PyNumber_Lshift)
+THUNK_BINOP(thunk_rshift, PyNumber_Rshift)
+THUNK_BINOP(thunk_and, PyNumber_And)
+THUNK_BINOP(thunk_xor, PyNumber_Xor)
+THUNK_BINOP(thunk_or, PyNumber_Or)
 
 /* Inplace operators -------------------------------------------------------- */
 
-#define thunk_inplace(name, func)                           \
-    static PyObject *                                       \
-    name(PyObject *self, PyObject *other)                   \
-    {                                                       \
-        PyObject *val;                                      \
-        if (!(val = _strict_eval_borrowed(self))) {         \
-            return NULL;                                    \
-        }                                                   \
-        return func(val, other);                            \
+#define THUNK_INPLACE(name, func)                               \
+    static PyObject *                                           \
+    name(PyObject *self, PyObject *other)                       \
+    {                                                           \
+        PyObject *val;                                          \
+        if (!(val = _strict_eval_borrowed(self))) {             \
+            return NULL;                                        \
+        }                                                       \
+        return func(val, other);                                \
     }
 
-thunk_binop(thunk_iadd, PyNumber_InPlaceAdd)
-thunk_binop(thunk_isub, PyNumber_InPlaceSubtract)
-thunk_binop(thunk_imul, PyNumber_InPlaceMultiply)
-thunk_binop(thunk_imatmul, PyNumber_InPlaceMatrixMultiply)
-thunk_binop(thunk_ifloordiv, PyNumber_InPlaceFloorDivide)
-thunk_binop(thunk_itruediv, PyNumber_InPlaceTrueDivide)
-thunk_binop(thunk_irem, PyNumber_InPlaceRemainder)
-thunk_binop(thunk_ilshift, PyNumber_InPlaceLshift)
-thunk_binop(thunk_irshift, PyNumber_InPlaceRshift)
-thunk_binop(thunk_iand, PyNumber_InPlaceAnd)
-thunk_binop(thunk_ixor, PyNumber_InPlaceXor)
-thunk_binop(thunk_ior, PyNumber_InPlaceOr)
+THUNK_INPLACE(thunk_iadd, PyNumber_InPlaceAdd)
+THUNK_INPLACE(thunk_isub, PyNumber_InPlaceSubtract)
+THUNK_INPLACE(thunk_imul, PyNumber_InPlaceMultiply)
+THUNK_INPLACE(thunk_imatmul, PyNumber_InPlaceMatrixMultiply)
+THUNK_INPLACE(thunk_ifloordiv, PyNumber_InPlaceFloorDivide)
+THUNK_INPLACE(thunk_itruediv, PyNumber_InPlaceTrueDivide)
+THUNK_INPLACE(thunk_irem, PyNumber_InPlaceRemainder)
+THUNK_INPLACE(thunk_ilshift, PyNumber_InPlaceLshift)
+THUNK_INPLACE(thunk_irshift, PyNumber_InPlaceRshift)
+THUNK_INPLACE(thunk_iand, PyNumber_InPlaceAnd)
+THUNK_INPLACE(thunk_ixor, PyNumber_InPlaceXor)
+THUNK_INPLACE(thunk_ior, PyNumber_InPlaceOr)
 
 static PyObject *
 thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
@@ -621,7 +625,7 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
 
 /* Unary operators ---------------------------------------------------------- */
 
-#define thunk_unop(name, func)                                          \
+#define THUNK_UNOP(name, func)                                          \
     static PyObject *                                                   \
     name(PyObject *self)                                                \
     {                                                                   \
@@ -652,10 +656,10 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
         return ret;                                                     \
     }
 
-thunk_unop(thunk_neg, PyNumber_Negative)
-thunk_unop(thunk_pos, PyNumber_Positive)
-thunk_unop(thunk_abs, PyNumber_Absolute)
-thunk_unop(thunk_inv, PyNumber_Invert)
+THUNK_UNOP(thunk_neg, PyNumber_Negative)
+THUNK_UNOP(thunk_pos, PyNumber_Positive)
+THUNK_UNOP(thunk_abs, PyNumber_Absolute)
+THUNK_UNOP(thunk_inv, PyNumber_Invert)
 
 /* Ternary operators ------------------------------------------------------- */
 
@@ -706,7 +710,7 @@ thunk_power(PyObject *a, PyObject *b, PyObject *c)
 
 /* Converters -------------------------------------------------------------- */
 
-#define thunk_strict_converter(name, type, default_, func)       \
+#define THUNK_STRICT_CONVERTER(name, type, default_, func)       \
     static type                                                 \
     name(PyObject *self)                                        \
     {                                                           \
@@ -717,10 +721,10 @@ thunk_power(PyObject *a, PyObject *b, PyObject *c)
         return func(val);                                       \
     }
 
-thunk_strict_converter(thunk_long, PyObject*, NULL, PyNumber_Long)
-thunk_strict_converter(thunk_float, PyObject*, NULL, PyNumber_Float)
-thunk_strict_converter(thunk_index, PyObject*, NULL, PyNumber_Index)
-thunk_strict_converter(thunk_bool, int, -1, PyObject_IsTrue)
+THUNK_STRICT_CONVERTER(thunk_long, PyObject*, NULL, PyNumber_Long)
+THUNK_STRICT_CONVERTER(thunk_float, PyObject*, NULL, PyNumber_Float)
+THUNK_STRICT_CONVERTER(thunk_index, PyObject*, NULL, PyNumber_Index)
+THUNK_STRICT_CONVERTER(thunk_bool, int, -1, PyObject_IsTrue)
 
 /* As number --------------------------------------------------------------- */
 
@@ -861,8 +865,8 @@ thunk_call(PyObject *self, PyObject *args, PyObject *kwargs)
     return _thunk_new_no_check(tmp, args, kwargs);
 }
 
-thunk_strict_converter(thunk_repr, PyObject*, NULL, PyObject_Repr)
-thunk_strict_converter(thunk_str, PyObject*, NULL, PyObject_Str)
+THUNK_STRICT_CONVERTER(thunk_repr, PyObject*, NULL, PyObject_Repr)
+THUNK_STRICT_CONVERTER(thunk_str, PyObject*, NULL, PyObject_Str)
 
 static PyObject *
 thunk_getattro(PyObject *self, PyObject *name)
@@ -872,7 +876,14 @@ thunk_getattro(PyObject *self, PyObject *name)
     PyObject *arg;
     PyObject *ret;
 
-    if (!(func = binwrapper_from_func(PyObject_GenericGetAttr))) {
+    if (!PyUnicode_CompareWithASCIIString(name, "__class__")) {
+        if (!(tmp = _strict_eval_borrowed(self))) {
+            return NULL;
+        }
+        return PyObject_GetAttr(tmp, name);
+    }
+
+    if (!(func = binwrapper_from_func(PyObject_GetAttr))) {
         return NULL;
     }
 
@@ -887,14 +898,14 @@ thunk_getattro(PyObject *self, PyObject *name)
         return NULL;
     }
 
-    if (!(arg = Py_BuildValue("(N)", tmp))) {
+    if (!(arg = Py_BuildValue("(OO)", tmp, name))) {
         Py_DECREF(func);
         Py_DECREF(tmp);
         return NULL;
     }
     ret = _thunk_new_no_check(func, arg, NULL);
     Py_DECREF(func);
-    Py_DECREF(tmp);
+    Py_DECREF(arg);
     return ret;
 }
 
@@ -940,29 +951,19 @@ thunk_clear(thunk *self)
 
 /* Rich compare helpers ---------------------------------------------------- */
 
-#define thunk_cmpop(name, op)                                           \
+#define THUNK_CMPOP(name, op)                                           \
     static PyObject *                                                   \
     name(PyObject *self, PyObject *other)                               \
     {                                                                   \
-        PyObject *tmp;                                                  \
-        PyObject *arg;                                                  \
-        PyObject *ret;                                                  \
-        if (!(arg = PyTuple_Pack(1, self))) {                           \
-            return NULL;                                                \
-        }                                                               \
-        tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL); \
-        Py_DECREF(arg);                                                 \
-        ret = PyObject_RichCompare(tmp, other, op);                     \
-        Py_DECREF(tmp);                                                 \
-        return ret;                                                     \
+        return PyObject_RichCompare(self, other, op);                   \
     }
 
-thunk_cmpop(thunk_lt, Py_LT)
-thunk_cmpop(thunk_le, Py_LE)
-thunk_cmpop(thunk_eq, Py_EQ)
-thunk_cmpop(thunk_ne, Py_NE)
-thunk_cmpop(thunk_gt, Py_GT)
-thunk_cmpop(thunk_ge, Py_GE)
+THUNK_CMPOP(thunk_lt, Py_LT)
+THUNK_CMPOP(thunk_le, Py_LE)
+THUNK_CMPOP(thunk_eq, Py_EQ)
+THUNK_CMPOP(thunk_ne, Py_NE)
+THUNK_CMPOP(thunk_gt, Py_GT)
+THUNK_CMPOP(thunk_ge, Py_GE)
 
 static PyObject *
 thunk_richcmp(thunk *self, PyObject *other, int op)
@@ -1010,8 +1011,14 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
         return NULL;
     }
 
-    ret = _thunk_new_no_check(func, tmp, NULL);
-    Py_DECREF(tmp);
+    if (!(arg = Py_BuildValue("(NO)", tmp, other))) {
+        Py_DECREF(tmp);
+        Py_DECREF(func);
+        return NULL;
+    }
+    ret = _thunk_new_no_check(func, arg, NULL);
+    Py_DECREF(func);
+    Py_DECREF(arg);
     return ret;
 }
 
@@ -1050,7 +1057,7 @@ static PyTypeObject thunk_type = {
     0,                                          /* tp_methods */
     0,                                          /* tp_members */
     0,                                          /* tp_getset */
-    &PyBaseObject_Type,                          /* tp_base */
+    &PyBaseObject_Type,                         /* tp_base */
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */

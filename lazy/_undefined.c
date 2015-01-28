@@ -92,7 +92,7 @@ PyInit__undefined(void)
         return NULL;
     }
 
-    if (PyDict_SetItemString(dict_, "strict", strict)) {
+    if (PyDict_SetItemString(dict_, "__strict__", strict)) {
         Py_DECREF(dict_);
         return NULL;
     }

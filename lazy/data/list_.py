@@ -1,12 +1,10 @@
 from abc import ABCMeta, abstractmethod
-from six import with_metaclass
 
-from lazy.seq import strict
-from lazy.thunk import Thunk
+from lazy._thunk import strict
 from lazy.utils import singleton
 
 
-class LazyList(with_metaclass(ABCMeta)):
+class LazyList(metaclass=ABCMeta):
     def __repr__(self):
         return repr(self.strict)
 
@@ -26,16 +24,13 @@ class LazyList(with_metaclass(ABCMeta)):
         raise NotImplementedError('__iter__')
 
 
-Thunk.register(LazyList)
-
-
 @singleton
 class NilType(LazyList):
     def __init__(self):
         pass
 
     @property
-    def strict(self):
+    def __strict__(self):
         return ()
 
     def __getitem__(self, key):
@@ -56,7 +51,7 @@ class Cons(LazyList):
         self._cdr = cdr
 
     @property
-    def strict(self):
+    def __strict__(self):
         return self._normal_form()
 
     def _normal_form(self):
