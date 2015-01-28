@@ -1004,6 +1004,10 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
     case Py_GE:
         f = thunk_ge;
         break;
+    default:
+      Py_DECREF(tmp);
+      PyErr_BadInternalCall();
+      return NULL;
     }
 
     if (!(func = binwrapper_from_func(f))) {
