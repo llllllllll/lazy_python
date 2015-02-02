@@ -70,23 +70,6 @@ strict. Doing anything with the returned thunk will keep chaining on more
 computations until it must be strictly evaluated.
 
 
-#### `LazyContext` ####
-
-This allows us to embed a block of lazy python in our strict environment. This
-is the hackiest of all the aproaches.
-
-Examples:
-
-```python
-with LazyContext():
-    print('lazy')
-    strict(print('strict'))
-```
-
-This only prints 'strict'.
-
-
-
 ### `thunk` ###
 
 At it's core, lazy is just a way of converting expressions into a tree of
