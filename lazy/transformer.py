@@ -33,7 +33,7 @@ class LazyTransformer(with_metaclass(DispatchMeta, ast.NodeTransformer)):
     """
     Parses a python syntax tree and creates a lazy one.
     """
-    THUNK = isolate_namespace('Thunk')
+    THUNK = isolate_namespace('thunk')
 
     @register_types(
         ast.Num,

@@ -6,10 +6,14 @@ from lazy.utils import singleton
 
 class LazyList(metaclass=ABCMeta):
     def __repr__(self):
-        return repr(self.strict)
+        return repr(strict(self))
 
     def __str__(self):
-        return str(self.strict)
+        return str(strict(self))
+
+    @abstractmethod
+    def __strict__(self):
+        raise NotImplementedError('__strict__')
 
     @abstractmethod
     def __getitem__(self, key):
@@ -70,7 +74,7 @@ class Cons(LazyList):
             return self._cdr[key - 1]
 
     def __len__(self):
-        return len(self.strict)
+        return len(strict(self))
 
     def __iter__(self):
         a = self
