@@ -1,8 +1,9 @@
 from lazy import data
 from lazy._thunk import thunk, strict
-from lazy.transformer import LazyTransformer
-from lazy.runtime import run_lazy, lazy_function
 from lazy._undefined import undefined
+from lazy.bytecode import lazy_function
+from lazy.runtime import run_lazy
+from lazy.transformer import LazyTransformer
 
 
 __all__ = [

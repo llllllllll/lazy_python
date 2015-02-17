@@ -4,13 +4,6 @@
 // We can only use matmul on 3.5+.
 #define NT_HAS_MATMUL PY_MINOR_VERSION >= 5
 
-static PyObject *
-no_new(PyObject *cls, PyObject *args, PyObject *kwargs)
-{
-    PyErr_SetString(PyExc_TypeError, "Cannot create instances.");
-    return NULL;
-}
-
 typedef struct{
     PyObject_HEAD
     void *wr_func;
@@ -81,7 +74,7 @@ static PyTypeObject binwrapper_type = {
     0,                                          /* tp_dictoffset */
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
-    (newfunc) no_new,                           /* tp_new */
+    0,                                          /* tp_new */
 };
 
 static PyObject *
@@ -159,7 +152,7 @@ static PyTypeObject unarywrapper_type = {
     0,                                          /* tp_dictoffset */
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
-    (newfunc) no_new,                           /* tp_new */
+    0,                                          /* tp_new */
 };
 
 static PyObject *
@@ -240,7 +233,7 @@ static PyTypeObject ternarywrapper_type = {
     0,                                          /* tp_dictoffset */
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
-    (newfunc) no_new,                           /* tp_new */
+    0,                                          /* tp_new */
 };
 
 static PyObject *
@@ -256,6 +249,76 @@ ternarywrapper_from_func(void *func)
     wr->wr_func = func;
     return (PyObject*) wr;
 }
+
+/* next wrapper -------------------------------------------------------------*/
+
+static PyTypeObject nextwrapper_type;
+
+static PyObject *
+nextwrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *ret;
+
+    if (kwargs) {
+        PyErr_SetString(PyExc_TypeError,
+                        "callable does not accept keyword arguments");
+        return NULL;
+    }
+
+    if (PyTuple_GET_SIZE(args) != 1) {
+        PyErr_Format(PyExc_TypeError,
+                     "callable expects 1 arguments, passed %zd",
+                     PyTuple_GET_SIZE(args));
+        return NULL;
+    }
+
+    ret = PyIter_Next(PyTuple_GET_ITEM(args, 0));
+    if (!(ret && !PyErr_Occurred())) {
+        PyErr_SetString(PyExc_StopIteration, "");
+    }
+    return ret;
+}
+
+static PyTypeObject nextwrapper_type = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    "lazy._thunk.nextwrapper",                  /* tp_name */
+    sizeof(PyObject),                           /* tp_basicsize */
+    0,                                          /* tp_itemsize */
+    0,                                          /* tp_dealloc */
+    0,                                          /* tp_print */
+    0,                                          /* tp_getattr */
+    0,                                          /* tp_setattr */
+    0,                                          /* tp_reserved */
+    0,                                          /* tp_repr */
+    0,                                          /* tp_as_number */
+    0,                                          /* tp_as_sequence */
+    0,                                          /* tp_as_mapping */
+    0,                                          /* tp_hash */
+    (ternaryfunc) nextwrapper_call,             /* tp_call */
+    0,                                          /* tp_str */
+    PyObject_GenericGetAttr,                    /* tp_getattro */
+    0,                                          /* tp_setattro */
+    0,                                          /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+    callablewrapper_doc,                        /* tp_doc */
+    0,                                          /* tp_traverse */
+    0,                                          /* tp_clear */
+    0,                                          /* tp_richcompare */
+    0,                                          /* tp_weaklistoffset */
+    0,                                          /* tp_iter */
+    0,                                          /* tp_iternext */
+    0,                                          /* tp_methods */
+    0,                                          /* tp_members */
+    0,                                          /* tp_getset */
+    0,                                          /* tp_base */
+    0,                                          /* tp_dict */
+    0,                                          /* tp_descr_get */
+    0,                                          /* tp_descr_set */
+    0,                                          /* tp_dictoffset */
+    0,                                          /* tp_init */
+    0,                                          /* tp_alloc */
+    0,                                          /* tp_new */
+};
 
 /* thunk ------------------------------------------------------------------- */
 
@@ -533,44 +596,14 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
     static PyObject *                                                   \
     name(PyObject *a, PyObject *b)                                      \
     {                                                                   \
-        PyObject *tmp;                                                  \
         PyObject *fn;                                                   \
         PyObject *arg;                                                  \
         PyObject *ret;                                                  \
         if (!(fn = binwrapper_from_func(func))) {                       \
             return NULL;                                                \
         }                                                               \
-        if (PyObject_IsInstance(a, (PyObject*) &thunk_type)) {          \
-            if (!(arg = PyTuple_Pack(1, a))) {                          \
-                return NULL;                                            \
-            }                                                           \
-            tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL); \
-            Py_DECREF(arg);                                             \
-            if (!tmp) {                                                 \
-                Py_DECREF(fn);                                          \
-                return NULL;                                            \
-            }                                                           \
-            if (!(arg = Py_BuildValue("(NO)", tmp, b))) {               \
-                Py_DECREF(fn);                                          \
-                Py_DECREF(tmp);                                         \
-                return NULL;                                            \
-            }                                                           \
-        }                                                               \
-        else {                                                          \
-            if (!(arg = PyTuple_Pack(1, b))) {                          \
-                return NULL;                                            \
-            }                                                           \
-            tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL); \
-            Py_DECREF(arg);                                             \
-            if (!tmp) {                                                 \
-                Py_DECREF(fn);                                          \
-                return NULL;                                            \
-            }                                                           \
-            if (!(arg = Py_BuildValue("(ON)", a, tmp))) {               \
-                Py_DECREF(fn);                                          \
-                Py_DECREF(tmp);                                         \
-                return NULL;                                            \
-            }                                                           \
+        if (!(arg = PyTuple_Pack(2, a, b))) {                           \
+            Py_DECREF(fn);                                              \
         }                                                               \
         ret = _thunk_new_no_check(fn, arg, NULL);                       \
         Py_DECREF(fn);                                                  \
@@ -647,7 +680,6 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
     static PyObject *                                                   \
     name(PyObject *self)                                                \
     {                                                                   \
-        PyObject *tmp;                                                  \
         PyObject *fn;                                                   \
         PyObject *arg;                                                  \
         PyObject *ret;                                                  \
@@ -655,16 +687,6 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
             return NULL;                                                \
         }                                                               \
         if (!(arg = PyTuple_Pack(1, self))) {                           \
-            Py_DECREF(fn);                                              \
-            return NULL;                                                \
-        }                                                               \
-        tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL); \
-        Py_DECREF(arg);                                                 \
-        if (!tmp) {                                                     \
-            Py_DECREF(fn);                                              \
-            return NULL;                                                \
-        }                                                               \
-        if (!(arg = Py_BuildValue("(N)", fn))) {                        \
             Py_DECREF(fn);                                              \
             return NULL;                                                \
         }                                                               \
@@ -971,6 +993,29 @@ thunk_clear(thunk *self)
     return 0;
 }
 
+
+THUNK_UNOP(thunk_iter, PyObject_GetIter)
+
+static PyObject *
+thunk_next(thunk *self)
+{
+    PyObject *fn;
+    PyObject *arg;
+    PyObject *ret;
+    if (!(fn = PyObject_New(PyObject, &nextwrapper_type))) {
+        return NULL;
+    }
+    if (!(arg = PyTuple_Pack(1, self))) {
+        Py_DECREF(fn);
+        return NULL;
+    }
+    ret = _thunk_new_no_check(fn, arg, NULL);
+    Py_DECREF(fn);
+    Py_DECREF(arg);
+    return ret;
+}
+
+
 /* Rich compare helpers ---------------------------------------------------- */
 
 #define THUNK_CMPOP(name, op)                                           \
@@ -992,18 +1037,10 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
 {
     PyObject *(*f)(PyObject*,PyObject*);
     PyObject *func;
-    PyObject *tmp;
     PyObject *arg;
     PyObject *ret;
 
-    if (!(arg = PyTuple_Pack(1, self))) {
-        return NULL;
-    }
-
-    tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL);
-    Py_DECREF(arg);
-
-    if (!tmp) {
+    if (!(arg = PyTuple_Pack(2, self, other))) {
         return NULL;
     }
 
@@ -1027,19 +1064,13 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
         f = thunk_ge;
         break;
     default:
-      Py_DECREF(tmp);
+      Py_DECREF(arg);
       PyErr_BadInternalCall();
       return NULL;
     }
 
     if (!(func = binwrapper_from_func(f))) {
-        Py_DECREF(tmp);
-        return NULL;
-    }
-
-    if (!(arg = Py_BuildValue("(NO)", tmp, other))) {
-        Py_DECREF(tmp);
-        Py_DECREF(func);
+        Py_DECREF(arg);
         return NULL;
     }
     ret = _thunk_new_no_check(func, arg, NULL);
@@ -1078,8 +1109,8 @@ static PyTypeObject thunk_type = {
     (inquiry) thunk_clear,                      /* tp_clear */
     (richcmpfunc) thunk_richcmp,                /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
-    0,                                          /* tp_iter */
-    0,                                          /* tp_iternext */
+    (getiterfunc) thunk_iter,                   /* tp_iter */
+    (iternextfunc) thunk_next,                  /* tp_iternext */
     0,                                          /* tp_methods */
     0,                                          /* tp_members */
     0,                                          /* tp_getset */
