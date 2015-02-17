@@ -439,11 +439,11 @@ static PyTypeObject strict_type = {
 
 static void
 thunk_dealloc(thunk *self){
-    /* Py_XDECREF(self->th_func); */
-    /* Py_XDECREF(self->th_args); */
-    /* Py_XDECREF(self->th_kwargs); */
-    /* Py_XDECREF(self->th_normal); */
-    /* PyMem_Del((PyObject*) self); */
+    Py_XDECREF(self->th_func);
+    Py_XDECREF(self->th_args);
+    Py_XDECREF(self->th_kwargs);
+    Py_XDECREF(self->th_normal);
+    PyMem_Del((PyObject*) self);
 }
 
 /* Create a thunk without checking if `func` is a strict type.
