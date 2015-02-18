@@ -1,0 +1,14 @@
+language: python
+python:
+ - "3.3"
+ - "3.4"
+
+install:
+ - pip install -e .
+ - pip install -r etc/requirements_dev.txt
+
+before_script:
+ - flake8 tests/ lazy/
+
+script:
+ - nosetests
