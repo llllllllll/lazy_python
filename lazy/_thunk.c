@@ -1,6 +1,9 @@
 #include <Python.h>
 #include <stdbool.h>
 
+// We can only use matmul on 3.5+.
+#define NT_HAS_MATMUL PY_MINOR_VERSION >= 5
+
 static PyObject *
 no_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 {
@@ -571,7 +574,11 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 THUNK_BINOP(thunk_add, PyNumber_Add)
 THUNK_BINOP(thunk_sub, PyNumber_Subtract)
 THUNK_BINOP(thunk_mul, PyNumber_Multiply)
+
+#if NT_HAS_MATMUL
 THUNK_BINOP(thunk_matmul, PyNumber_MatrixMultiply)
+#endif
+
 THUNK_BINOP(thunk_floordiv, PyNumber_FloorDivide)
 THUNK_BINOP(thunk_truediv, PyNumber_TrueDivide)
 THUNK_BINOP(thunk_rem, PyNumber_Remainder)
@@ -598,7 +605,11 @@ THUNK_BINOP(thunk_or, PyNumber_Or)
 THUNK_INPLACE(thunk_iadd, PyNumber_InPlaceAdd)
 THUNK_INPLACE(thunk_isub, PyNumber_InPlaceSubtract)
 THUNK_INPLACE(thunk_imul, PyNumber_InPlaceMultiply)
+
+#if NT_HAS_MATMUL
 THUNK_INPLACE(thunk_imatmul, PyNumber_InPlaceMatrixMultiply)
+#endif
+
 THUNK_INPLACE(thunk_ifloordiv, PyNumber_InPlaceFloorDivide)
 THUNK_INPLACE(thunk_itruediv, PyNumber_InPlaceTrueDivide)
 THUNK_INPLACE(thunk_irem, PyNumber_InPlaceRemainder)
@@ -763,8 +774,12 @@ static PyNumberMethods thunk_as_number = {
     (binaryfunc) thunk_ifloordiv,
     (binaryfunc) thunk_itruediv,
     (unaryfunc) thunk_index,
+
+#if NT_HAS_MATMUL
     (binaryfunc) thunk_matmul,
     (binaryfunc) thunk_imatmul,
+#endif
+
 };
 
 /* As mapping -------------------------------------------------------------- */
