@@ -1,5 +1,7 @@
 # `lazy` #
 
+[![build status](https://travis-ci.org/llllllllll/lazy_python.svg?branch=master)](https://travis-ci.org/llllllllll/lazy_python)
+
 I will write this later...
 
 
