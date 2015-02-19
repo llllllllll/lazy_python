@@ -1,5 +1,4 @@
 import ast
-from six import itervalues, with_metaclass
 
 from lazy.utils import isolate_namespace
 
@@ -10,7 +9,7 @@ class DispatchMeta(type):
     when they have been decorated with register_types.
     """
     def __new__(mcls, name, bases, dict_):
-        for v in itervalues(dict(dict_)):
+        for v in dict(dict_).values():
             types = getattr(v, '_types', ())
             for type_ in types:
                 dict_['visit_' + type_.__name__] = v
@@ -29,7 +28,7 @@ def register_types(*types):
     return decorator
 
 
-class LazyTransformer(with_metaclass(DispatchMeta, ast.NodeTransformer)):
+class LazyTransformer(ast.NodeTransformer, metaclass=DispatchMeta):
     """
     Parses a python syntax tree and creates a lazy one.
     """
