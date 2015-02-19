@@ -10,7 +10,7 @@ I will write this later...
 `lazy` is a module for making python
 [lazily evaluated](http://en.wikipedia.org/wiki/Lazy_evaluation) (kinda).
 
-`lazy` runs under python 3.5.
+`lazy` runs under python 3.5 and 3.4.
 
 
 ## Why lazy? ##
