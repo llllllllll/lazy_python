@@ -449,14 +449,24 @@ thunk_dealloc(thunk *self)
     Py_TYPE(self)->tp_free((PyObject*) self);
 }
 
+static PyObject *
+thunk_alloc(PyTypeObject *cls, Py_ssize_t nitems)
+{
+    return PyObject_GC_New(PyObject, cls);
+}
+
+
 /* Create a thunk without checking if `func` is a strict type.
    return: A new reference. */
 static PyObject *
-_thunk_new_no_check(PyObject *func, PyObject *args, PyObject *kwargs)
+_thunk_new_no_check(PyTypeObject *cls,
+                    PyObject *func,
+                    PyObject *args,
+                    PyObject *kwargs)
 {
     thunk *self;
 
-    if (!(self = PyObject_GC_New(thunk, &thunk_type))) {
+    if (!(self = (thunk*) cls->tp_alloc(cls, 0))) {
         return NULL;
     }
 
@@ -512,7 +522,10 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
         ret = PyObject_Call(th_func, th_args, kwargs);
     }
     else {
-        ret = _thunk_new_no_check(th_func, th_args, kwargs);
+        ret = _thunk_new_no_check((PyTypeObject*) cls,
+                                  th_func,
+                                  th_args,
+                                  kwargs);
     }
 
     Py_DECREF(th_args);
@@ -529,13 +542,23 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
         PyObject *fn;                                                   \
         PyObject *arg;                                                  \
         PyObject *ret;                                                  \
+        int instance_p;                                                 \
         if (!(fn = binwrapper_from_func(func))) {                       \
             return NULL;                                                \
         }                                                               \
         if (!(arg = PyTuple_Pack(2, a, b))) {                           \
             Py_DECREF(fn);                                              \
         }                                                               \
-        ret = _thunk_new_no_check(fn, arg, NULL);                       \
+        instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type);   \
+        if (instance_p == -1) {                                         \
+            Py_DECREF(arg);                                             \
+            Py_DECREF(fn);                                              \
+            return NULL;                                                \
+        }                                                               \
+        ret = _thunk_new_no_check(Py_TYPE(instance_p ? a : b),          \
+                                  fn,                                   \
+                                  arg,                                  \
+                                  NULL);                                \
         Py_DECREF(fn);                                                  \
         Py_DECREF(arg);                                                 \
         return ret;                                                     \
@@ -620,7 +643,7 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
             Py_DECREF(fn);                                              \
             return NULL;                                                \
         }                                                               \
-        ret = _thunk_new_no_check(fn, arg, NULL);                       \
+        ret = _thunk_new_no_check(Py_TYPE(self), fn, arg, NULL);        \
         Py_DECREF(fn);                                                  \
         Py_DECREF(arg);                                                 \
         return ret;                                                     \
@@ -636,43 +659,26 @@ THUNK_UNOP(thunk_inv, PyNumber_Invert)
 static PyObject *
 thunk_power(PyObject *a, PyObject *b, PyObject *c)
 {
-    PyObject *tmp;
     PyObject *fn;
     PyObject *arg;
-    PyObject *tmparg;
     PyObject *ret;
+    int instance_p;
 
     if (!(fn = ternarywrapper_from_func(PyNumber_Power))) {
         return NULL;
     }
 
-    if (PyObject_IsInstance(a, (PyObject*) &thunk_type)) {
-        if (!(tmparg = PyTuple_Pack(1, a))) {
-            Py_DECREF(fn);
-            return NULL;
-        }
-        tmp = _thunk_new_no_check((PyObject*) &strict_type, tmparg, NULL);
-        Py_DECREF(tmparg);
-        if (!tmp) {
-            Py_DECREF(fn);
-            return NULL;
-        }
-        arg = Py_BuildValue("(NOO)", tmp, b, c);
+    if (!(arg = PyTuple_Pack(3, a, b, c))) {
+        Py_DECREF(fn);
+        return NULL;
     }
-    else {
-        if (!(tmparg = PyTuple_Pack(1, b))) {
-            Py_DECREF(fn);
-            return NULL;
-        }
-        tmp = _thunk_new_no_check((PyObject*) &strict_type, tmparg, NULL);
-        Py_DECREF(tmparg);
-        if (!tmp) {
-            Py_DECREF(fn);
-            return NULL;
-        }
-        arg = Py_BuildValue("(ONO)", a, tmp, c);
+
+    if ((instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type)) == -1) {
+        Py_DECREF(fn);
+        Py_DECREF(arg);
+        return NULL;
     }
-    ret = _thunk_new_no_check(fn, arg, NULL);
+    ret = _thunk_new_no_check(Py_TYPE(instance_p ? a : b), fn, arg, NULL);
     Py_DECREF(fn);
     Py_DECREF(arg);
     return ret;
@@ -758,32 +764,21 @@ thunk_len(PyObject *self)
 static PyObject *
 thunk_getitem(PyObject *self, PyObject *key)
 {
-    PyObject *tmp;
     PyObject *func;
     PyObject *arg;
     PyObject *ret;
 
-    if (!(arg = PyTuple_Pack(1, self))) {
-        return NULL;
-    }
-    tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL);
-    Py_DECREF(arg);
-    if (!tmp) {
-        return NULL;
-    }
     if (!(func = binwrapper_from_func(PyObject_GetItem))) {
-        Py_DECREF(tmp);
         return NULL;
     }
 
-    if (!(arg = Py_BuildValue("(NO)", tmp, key))) {
+    if (!(arg = Py_BuildValue("(OO)", self, key))) {
         Py_DECREF(func);
-        Py_DECREF(tmp);
         return NULL;
     }
-    ret = _thunk_new_no_check(func, arg, NULL);
+    ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
     Py_DECREF(func);
-    Py_DECREF(tmp);
+    Py_DECREF(arg);
     return ret;
 }
 
@@ -823,20 +818,7 @@ thunk_hash(PyObject *self)
 static PyObject *
 thunk_call(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    PyObject *tmp;
-    PyObject *arg;
-
-    if (!(arg = PyTuple_Pack(1, self))) {
-        return NULL;
-    }
-
-    tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL);
-    Py_DECREF(arg);
-    if (!tmp) {
-        return NULL;
-    }
-
-    return _thunk_new_no_check(tmp, args, kwargs);
+    return _thunk_new_no_check(Py_TYPE(self), self, args, kwargs);
 }
 
 THUNK_STRICT_CONVERTER(thunk_repr, PyObject*, NULL, PyObject_Repr)
@@ -846,38 +828,25 @@ static PyObject *
 thunk_getattro(PyObject *self, PyObject *name)
 {
     PyObject *func;
-    PyObject *tmp;
     PyObject *arg;
     PyObject *ret;
 
     if (!PyUnicode_CompareWithASCIIString(name, "__class__")) {
-        if (!(tmp = _strict_eval_borrowed(self))) {
+        if (!(arg = _strict_eval_borrowed(self))) {
             return NULL;
         }
-        return PyObject_GetAttr(tmp, name);
+        return PyObject_GetAttr(arg, name);
     }
 
     if (!(func = binwrapper_from_func(PyObject_GetAttr))) {
         return NULL;
     }
 
-    if (!(arg = PyTuple_Pack(1, self))) {
+    if (!(arg = PyTuple_Pack(2, self, name))) {
         Py_DECREF(func);
         return NULL;
     }
-    tmp = _thunk_new_no_check((PyObject*) &strict_type, arg, NULL);
-    Py_DECREF(arg);
-    if (!tmp) {
-        Py_DECREF(func);
-        return NULL;
-    }
-
-    if (!(arg = Py_BuildValue("(OO)", tmp, name))) {
-        Py_DECREF(func);
-        Py_DECREF(tmp);
-        return NULL;
-    }
-    ret = _thunk_new_no_check(func, arg, NULL);
+    ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
     Py_DECREF(func);
     Py_DECREF(arg);
     return ret;
@@ -966,7 +935,7 @@ thunk_next(thunk *self)
         return NULL;
     }
 
-    ret = _thunk_new_no_check(fn, arg, NULL);
+    ret = _thunk_new_no_check(Py_TYPE(self), fn, arg, NULL);
     Py_DECREF(fn);
     Py_DECREF(arg);
     return ret;
@@ -1030,7 +999,7 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
         Py_DECREF(arg);
         return NULL;
     }
-    ret = _thunk_new_no_check(func, arg, NULL);
+    ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
     Py_DECREF(func);
     Py_DECREF(arg);
     return ret;
@@ -1077,7 +1046,7 @@ static PyTypeObject thunk_type = {
     0,                                          /* tp_descr_set */
     0,                                          /* tp_dictoffset */
     0,                                          /* tp_init */
-    0,                                          /* tp_alloc */
+    (allocfunc) thunk_alloc,                    /* tp_alloc */
     (newfunc) thunk_new,                        /* tp_new */
     (freefunc) thunk_free,                      /* tp_free */
 };
