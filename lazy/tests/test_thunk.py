@@ -78,6 +78,7 @@ def call(f, *args, **kwargs):
     """
     return f(*args, **kwargs)
 
+
 class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
     def test_laziness(self):
         def raiser():
