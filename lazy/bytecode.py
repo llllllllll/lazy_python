@@ -162,6 +162,7 @@ class LazyConverter(object):
     def transform_MAKE_FUNCTION(self, opcode, arg):
         yield ops.LOAD_CONST
         yield self._strict_idx
+        yield ops.ROT_TWO
         yield ops.CALL_FUNCTION
         yield b'\x01\x00'
         yield bytes((opcode,))
