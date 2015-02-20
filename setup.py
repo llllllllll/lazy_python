@@ -20,7 +20,7 @@ setup(
     long_description=long_description,
     license='GPL-2',
     classifiers=[
-        'Development Status :: 3 - Alpha'
+        'Development Status :: 3 - Alpha',
         'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
         'Natural Language :: English',
         'Programming Language :: Python :: 3 :: Only',
