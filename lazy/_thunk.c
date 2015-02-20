@@ -250,76 +250,6 @@ ternarywrapper_from_func(void *func)
     return (PyObject*) wr;
 }
 
-/* next wrapper -------------------------------------------------------------*/
-
-static PyTypeObject nextwrapper_type;
-
-static PyObject *
-nextwrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
-{
-    PyObject *ret;
-
-    if (kwargs) {
-        PyErr_SetString(PyExc_TypeError,
-                        "callable does not accept keyword arguments");
-        return NULL;
-    }
-
-    if (PyTuple_GET_SIZE(args) != 1) {
-        PyErr_Format(PyExc_TypeError,
-                     "callable expects 1 arguments, passed %zd",
-                     PyTuple_GET_SIZE(args));
-        return NULL;
-    }
-
-    ret = PyIter_Next(PyTuple_GET_ITEM(args, 0));
-    if (!(ret && !PyErr_Occurred())) {
-        PyErr_SetString(PyExc_StopIteration, "");
-    }
-    return ret;
-}
-
-static PyTypeObject nextwrapper_type = {
-    PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.nextwrapper",                  /* tp_name */
-    sizeof(PyObject),                           /* tp_basicsize */
-    0,                                          /* tp_itemsize */
-    0,                                          /* tp_dealloc */
-    0,                                          /* tp_print */
-    0,                                          /* tp_getattr */
-    0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
-    0,                                          /* tp_repr */
-    0,                                          /* tp_as_number */
-    0,                                          /* tp_as_sequence */
-    0,                                          /* tp_as_mapping */
-    0,                                          /* tp_hash */
-    (ternaryfunc) nextwrapper_call,             /* tp_call */
-    0,                                          /* tp_str */
-    PyObject_GenericGetAttr,                    /* tp_getattro */
-    0,                                          /* tp_setattro */
-    0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,                         /* tp_flags */
-    callablewrapper_doc,                        /* tp_doc */
-    0,                                          /* tp_traverse */
-    0,                                          /* tp_clear */
-    0,                                          /* tp_richcompare */
-    0,                                          /* tp_weaklistoffset */
-    0,                                          /* tp_iter */
-    0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
-    0,                                          /* tp_members */
-    0,                                          /* tp_getset */
-    0,                                          /* tp_base */
-    0,                                          /* tp_dict */
-    0,                                          /* tp_descr_get */
-    0,                                          /* tp_descr_set */
-    0,                                          /* tp_dictoffset */
-    0,                                          /* tp_init */
-    0,                                          /* tp_alloc */
-    0,                                          /* tp_new */
-};
-
 /* thunk ------------------------------------------------------------------- */
 
 typedef struct{
@@ -997,18 +927,38 @@ thunk_clear(thunk *self)
 THUNK_UNOP(thunk_iter, PyObject_GetIter)
 
 static PyObject *
+_id(PyObject *a)
+{
+    Py_INCREF(a);
+    return a;
+}
+
+static PyObject *
 thunk_next(thunk *self)
 {
     PyObject *fn;
     PyObject *arg;
+    PyObject *tmp;
     PyObject *ret;
-    if (!(fn = PyObject_New(PyObject, &nextwrapper_type))) {
+
+    if (!(fn = unarywrapper_from_func(_id))) {
         return NULL;
     }
-    if (!(arg = PyTuple_Pack(1, self))) {
+
+    if (!(tmp = _strict_eval_borrowed((PyObject*) self))) {
         Py_DECREF(fn);
         return NULL;
     }
+
+    if (!(tmp = PyIter_Next(tmp)) || PyErr_Occurred()) {
+        return NULL;
+    }
+
+    if (!(arg = PyTuple_Pack(1, tmp))) {
+        Py_DECREF(fn);
+        return NULL;
+    }
+
     ret = _thunk_new_no_check(fn, arg, NULL);
     Py_DECREF(fn);
     Py_DECREF(arg);
