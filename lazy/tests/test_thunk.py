@@ -181,3 +181,59 @@ class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
 
         with self.assertRaises(StopIteration):
             next(it)
+
+
+class Sub(thunk):
+    pass
+
+
+class SubClassTestCase(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.s = Sub(lambda: 1)
+
+    def test_subclass(self):
+        """
+        Tests the basics.
+        """
+        # Assert the basics
+        self.assertIsInstance(self.s, Sub)
+        self.assertIsInstance(self.s, thunk)
+        self.assertIsInstance(self.s, int)
+        self.assertEqual(self.s, 1)
+
+    def test_getattr(self):
+        self.assertIsInstance(
+            self.s.getattr_check, Sub, 'tp_getattro did not return a Sub',
+        )
+
+    def test_call(self):
+        self.assertIsInstance(
+            self.s(1), Sub, 'tp_call did not return a Sub',
+        )
+
+    def test_binop(self):
+        self.assertIsInstance(
+            self.s + 1, Sub, 'THUNK_BINOP did not return a Sub',
+        )
+
+    def test_power(self):
+        self.assertIsInstance(
+            self.s ** 1, Sub, 'thunk_power did not return a Sub',
+        )
+
+    def test_iter(self):
+        self.assertIsInstance(
+            iter(self.s), Sub, 'thunk_iter did not return a Sub',
+        )
+
+    def test_next(self):
+        n = next(Sub(lambda: iter((1, 2, 3))))
+        self.assertIsInstance(
+            n, Sub, 'thunk_next did not return a Sub',
+        )
+
+    def test_richcmp(self):
+        self.assertIsInstance(
+            self.s > 0, Sub, 'thunk_richcmp did not return a Sub',
+        )
