@@ -11,6 +11,9 @@ magic_class = object()
 
 
 class MagicTestDispatchMeta(type):
+    """
+    For handling the construction of the magic test list.
+    """
     def __new__(mcls, name, bases, dict_):
         for func, args in dict_.get('test_operators_lazy', ()):
             name = func.__name__
@@ -36,6 +39,9 @@ class MagicTestDispatchMeta(type):
 
 
 def _test_magic_func(f, name, args):
+    """
+    The actual test case for a the magic inner type.
+    """
     def wrapper(self):
         a = thunk(f, *args)
         with self.assertRaises(TypeError):
@@ -46,6 +52,18 @@ def _test_magic_func(f, name, args):
 
 
 def class_factory(func):
+    """
+    Constructs a type with a given magic that will raise an exception
+    when called.
+
+    For example:
+
+    >>> class_factory(operator.add)
+    <class 'add_test_class'>
+
+    This is a class which will raise a type error with the message '__add__'
+    when you try to use the addition operator on instances.
+    """
     magic = '__%s__' % func.__name__
 
     def raiser(self):
@@ -59,14 +77,6 @@ def call(f, *args, **kwargs):
     Alias to make the metaclass magic defer to __call__.
     """
     return f(*args, **kwargs)
-
-
-def nonzero(a):
-    """
-    Alias to make the metaclass magic work under py2.
-    """
-    return bool(a)
-
 
 class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
     def test_laziness(self):
@@ -83,6 +93,7 @@ class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
         self.assertIsInstance(th, int)
         self.assertIsInstance(th, thunk)
 
+    # MagicTestDispatchMeta makes tests for all of these.
     test_operators_lazy = (
         (operator.eq, (thunk(object),)),
         (operator.ne, (thunk(object),)),
@@ -153,3 +164,19 @@ class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
         (reversed, (magic_class,)),
         (call, (magic_class,)),
     )
+
+    def test_iter(self):
+        """
+        Tests that lazy iteration is correct and terminates.
+        This is a strict point.
+        """
+        t = thunk(lambda: (1, 2, 3))
+        it = iter(t)
+
+        self.assertIsInstance(it, thunk)
+
+        vals = tuple(self.assertIsInstance(a, thunk) or a for a in it)
+        self.assertEquals(vals, t)
+
+        with self.assertRaises(StopIteration):
+            next(it)
