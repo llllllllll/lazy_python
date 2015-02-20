@@ -5,12 +5,12 @@ import sys
 long_description = ''
 
 if 'upload' in sys.argv:
-    with open('README.md') as f:
+    with open('README.rst') as f:
         long_description = f.read()
 
 setup(
     name='lazy_python',
-    version='0.1.0',
+    version='0.1.1',
     description='Lazy evaluation for python 3',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
