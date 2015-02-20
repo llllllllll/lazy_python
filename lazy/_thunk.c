@@ -950,6 +950,13 @@ thunk_next(thunk *self)
         return NULL;
     }
 
+    if (!PyIter_Check(tmp)) {
+        PyErr_Format(PyExc_TypeError,
+                     "'%s' object is not an iterator'",
+                     Py_TYPE(tmp)->tp_name);
+        return NULL;
+    }
+
     if (!(tmp = PyIter_Next(tmp)) || PyErr_Occurred()) {
         return NULL;
     }
