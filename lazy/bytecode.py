@@ -82,7 +82,7 @@ class LazyConverter(object):
         self._id_idx = self.Indexer(self, id_)
         self.transformations = self.LazyTransformations(self)
         self._co_names = ()
-        self._globals = _globals or f.__globals__
+        self._globals = _globals if _globals is not None else f.__globals__
         self._call_args_idx = None
         self._call_kwargs_idx = None
         self._co_total_argcount = None
@@ -187,6 +187,8 @@ class LazyConverter(object):
             len(self._const_consts) +
             list(self._names.keys()).index(name)
         ).to_bytes(2, 'little')
+
+    transform_LOAD_NAME = transform_LOAD_GLOBAL
 
     def transform_LOAD_FAST(self, opcode, arg):
         if arg > self._co_total_argcount:
