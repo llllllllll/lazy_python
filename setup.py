@@ -9,9 +9,9 @@ if 'upload' in sys.argv:
         long_description = f.read()
 
 setup(
-    name='lazy',
+    name='lazy_python',
     version='0.1.0',
-    description='Lazy evaluation for python',
+    description='Lazy evaluation for python 3',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
     packages=[
