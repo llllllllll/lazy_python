@@ -32,29 +32,21 @@ class LazyTransformer(ast.NodeTransformer, metaclass=DispatchMeta):
     """
     Parses a python syntax tree and creates a lazy one.
     """
-    THUNK = isolate_namespace('thunk')
+    THUNK_FROMVALUE = isolate_namespace('thunk_fromvalue')
 
     @register_types(
         ast.Num,
         ast.Str,
     )
-    def _wrap_lambda_thunk(self, body):
+    def _wrap_thunk(self, body):
         return ast.fix_missing_locations(
             ast.Call(
                 func=ast.Name(
-                    id=self.THUNK,
+                    id=self.THUNK_FROMVALUE,
                     ctx=ast.Load(),
                 ),
                 args=[
-                    ast.Lambda(
-                        args=ast.arguments(
-                            args=[],
-                            kwonlyargs=[],
-                            kw_defaults=[],
-                            defaults=[],
-                        ),
-                        body=body,
-                    ),
+                    body,
                 ],
                 keywords=[],
                 starargs=None,
@@ -72,29 +64,10 @@ class LazyTransformer(ast.NodeTransformer, metaclass=DispatchMeta):
     )
     def _recursive_thunk(self, node):
         node = self.generic_visit(node)
-        return self._wrap_lambda_thunk(node)
-
-    def visit_Call(self, node):
-        node = self.generic_visit(node)
-        return ast.fix_missing_locations(
-            ast.Call(
-                func=ast.Name(
-                    id=self.THUNK,
-                    ctx=ast.Load(),
-                ),
-                args=[
-                    node.func,
-                ] + node.args,
-                keywords=node.keywords,
-                starargs=node.starargs,
-                kwargs=node.kwargs,
-                lineno=node.lineno,
-                col_offset=node.col_offset,
-            ),
-        )
+        return self._wrap_thunk(node)
 
     def visit_Name(self, node):
         if isinstance(node.ctx, ast.Load):
-            return self._wrap_lambda_thunk(node)
+            return self._wrap_thunk(node)
         else:
             return node

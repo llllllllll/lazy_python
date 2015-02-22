@@ -13,7 +13,7 @@ def run_lazy(src, name='<string>', globals_=None, locals_=None):
     locals_ = _getframe().f_back.f_locals if locals_ is None else locals_
 
     # Add the names for Thunk to be used by the runtime environment.
-    globals[transformer.THUNK] = thunk
+    globals_[transformer.THUNK_FROMVALUE] = thunk.fromvalue
     exec(code_obj, globals_, locals_)
 
 
