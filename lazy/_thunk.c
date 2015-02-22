@@ -517,9 +517,16 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 
     if (PyObject_IsInstance(th_func, (PyObject*) &PyType_Type) &&
         PyObject_IsSubclass(th_func, (PyObject*) &strict_type)) {
-
         /* Strict types get evaluated strictly. */
-        ret = PyObject_Call(th_func, th_args, kwargs);
+        if (PyTuple_GET_SIZE(th_args)) {
+            /* There are args to apply to strict. */
+            ret = PyObject_Call(th_func, th_args, kwargs);
+        }
+        else {
+            /* There are no args to apply, return the strict type. */
+            Py_INCREF(th_func);
+            ret = th_func;
+        }
     }
     else {
         ret = _thunk_new_no_check((PyTypeObject*) cls,
@@ -941,7 +948,6 @@ thunk_next(thunk *self)
     return ret;
 }
 
-
 /* Rich compare helpers ---------------------------------------------------- */
 
 #define THUNK_CMPOP(name, op)                                           \
@@ -1005,6 +1011,46 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
     return ret;
 }
 
+/* Extra methods ----------------------------------------------------------- */
+
+/* Create a thunk that wraps a single value. */
+static PyObject *
+thunk_fromvalue(PyObject *cls, PyObject *value)
+{
+    PyObject *fn;
+    PyObject *ret;
+    PyObject *arg;
+
+    if (PyObject_IsInstance(value, (PyObject*) &PyType_Type) &&
+        PyObject_IsSubclass(value, (PyObject*) &strict_type)) {
+        Py_INCREF(value);
+        return value;
+    }
+
+    if (!(fn = unarywrapper_from_func(_id))) {
+        return NULL;
+    }
+
+    if (!(arg = PyTuple_Pack(1, value))) {
+        Py_DECREF(fn);
+        return NULL;
+    }
+
+    ret = _thunk_new_no_check((PyTypeObject*) cls, fn, arg, NULL);
+    Py_DECREF(arg);
+    Py_DECREF(fn);
+    return ret;
+}
+
+PyDoc_STRVAR(thunk_fromvalue_doc, "Create a thunk that wraps a single value");
+
+PyMethodDef thunk_methods[] = {
+    {"fromvalue", thunk_fromvalue, METH_CLASS | METH_O, thunk_fromvalue_doc},
+    {NULL},
+};
+
+/* thunk definition -------------------------------------------------------- */
+
 PyDoc_STRVAR(thunk_doc, "A deferred computation.");
 
 static PyTypeObject thunk_type = {
@@ -1037,7 +1083,7 @@ static PyTypeObject thunk_type = {
     0,                                          /* tp_weaklistoffset */
     (getiterfunc) thunk_iter,                   /* tp_iter */
     (iternextfunc) thunk_next,                  /* tp_iternext */
-    0,                                          /* tp_methods */
+    thunk_methods,                              /* tp_methods */
     0,                                          /* tp_members */
     0,                                          /* tp_getset */
     &PyBaseObject_Type,                         /* tp_base */
