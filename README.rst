@@ -30,10 +30,10 @@ There are 2 means of using lazy code:
 2. ``run_lazy``
 
 ``lazy_function``
-^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~
 
-``lazy_function`` takes a python function and returns a new function that is
-the lazy version. This can be used as a decorator.
+``lazy_function`` takes a python function and returns a new function
+that is the lazy version. This can be used as a decorator.
 
 Example:
 
@@ -43,8 +43,8 @@ Example:
     def f(a, b):
         return a + b
 
-Calling ``f(1, 2)`` will return a ``thunk`` that will add 1 and 2 when it
-needs to be strict. Doing anything with the returned thunk will keep
+Calling ``f(1, 2)`` will return a ``thunk`` that will add 1 and 2 when
+it needs to be strict. Doing anything with the returned thunk will keep
 chaining on more computations until it must be strictly evaluated.
 
 Lazy functions allow for lexical closures also:
@@ -58,15 +58,18 @@ Lazy functions allow for lexical closures also:
         return g
 
 When we call ``f(1)`` we will get back a ``thunk`` like we would expect;
-however, this thunk is wrapping the function ``g``. Because ``g`` was created
-in a lazy context, it will also be a ``lazy_function`` implicitly. This means
-that ``type(f(1)(2))`` is ``thunk``; but, ``f(1)(2) == 3``.
+however, this thunk is wrapping the function ``g``. Because ``g`` was
+created in a lazy context, it will also be a ``lazy_function``
+implicitly. This means that ``type(f(1)(2))`` is ``thunk``; but,
+``f(1)(2) == 3``.
 
-This is implemented at the bytecode level to frontload a large part of the cost
-of using the lazy machinery. There is very little overhead at function call
-time as most of the overhead was spent at function creation (definiton) time.
+This is implemented at the bytecode level to frontload a large part of
+the cost of using the lazy machinery. There is very little overhead at
+function call time as most of the overhead was spent at function
+creation (definiton) time.
 
-We can use ``strict`` to strictly get values from a lazy function. for example:
+We can use ``strict`` to strictly get values from a lazy function. for
+example:
 
 .. code:: python
 
@@ -76,8 +79,8 @@ We can use ``strict`` to strictly get values from a lazy function. for example:
     ...
     >>> strict(f())
 
-As we can see, ``f`` did not print 'test' or return a value; however we can use
-strict inside a lazy function to force the side effect.
+As we can see, ``f`` did not print 'test' or return a value; however we
+can use strict inside a lazy function to force the side effect.
 
 .. code:: python
 
@@ -92,13 +95,13 @@ strict inside a lazy function to force the side effect.
     test
 
 Here we can see how strict works inside the function. strict causes the
-argument to be strictly evaluated, forcing the result of print and causing the
-side effect. Also, we can see that just calling ``f`` does not trigger this
-event, we also need to force the results of ``f`` before it's body is
-evaluated.
+argument to be strictly evaluated, forcing the result of print and
+causing the side effect. Also, we can see that just calling ``f`` does
+not trigger this event, we also need to force the results of ``f``
+before it's body is evaluated.
 
 ``run_lazy``
-^^^^^^^^^^^^
+~~~~~~~~~~~~
 
 We can convert normal python into lazy python with the ``run_lazy``
 function which takes a string, the 'name', globals, and locals. This is
@@ -116,31 +119,32 @@ Example:
     >>> run_lazy(code)
     lazy
 
-This version of running lazy code uses an AST transformer to restructure the
-code. This means that there is a far greater runtime overhead to using this
-method of executing lazy python; however, it allows us to write code outside
-the body of a function. Just like ``exec`` should be avoided when possible, it
-is prefered that users implement lazy code with ``lazy_function`` instead of
-``run_lazy``.
+This version of running lazy code uses an AST transformer to restructure
+the code. This means that there is a far greater runtime overhead to
+using this method of executing lazy python; however, it allows us to
+write code outside the body of a function. Just like ``exec`` should be
+avoided when possible, it is prefered that users implement lazy code
+with ``lazy_function`` instead of ``run_lazy``.
 
 ``thunk``
-~~~~~~~~~
+^^^^^^^^^
 
 At it's core, lazy is just a way of converting expressions into a tree
 of deferred computation objects called ``thunk``\ s. thunks wrap normal
 functions by not evaluating them until the value is needed. A ``thunk``
 wrapped function can accept ``thunk``\ s as arguments; this is how the
-tree is built. Some computations cannot be deferred because there is some state
-that is needed to construct the thunk, or the python standard defines the
-return of some method to be a specific type. These are refered to as 'strict
-points'. Examples of strict points are ``str`` and ``bool`` because the python
-standard says that these functions must return an instance of their own
-type. Most of these converters are strict; however, some other things are
-strict because it solves recursion issues in the interpreter, like accessing
-``__class__`` on a thunk.
+tree is built. Some computations cannot be deferred because there is
+some state that is needed to construct the thunk, or the python standard
+defines the return of some method to be a specific type. These are
+refered to as 'strict points'. Examples of strict points are ``str`` and
+``bool`` because the python standard says that these functions must
+return an instance of their own type. Most of these converters are
+strict; however, some other things are strict because it solves
+recursion issues in the interpreter, like accessing ``__class__`` on a
+thunk.
 
 ``LazyTransformer``
-~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^
 
 While we can manually write:
 
@@ -190,8 +194,8 @@ prevents the object from getting wrapped in thunks allowing you to
 create strict data structures.
 
 Objects may also define a ``__strict__`` attribute that defines how to
-strictly evaluate the object. For example, an object that should be equal to 5
-can be defined as:
+strictly evaluate the object. For example, an object that should be
+equal to 5 can be defined as:
 
 .. code:: python
 
@@ -204,34 +208,35 @@ This would make ``strict(StrictFive())`` return 5 instead of an instance
 of ``StrictFive``.
 
 ``undefined``
-~~~~~~~~~~~~~
+^^^^^^^^^^^^^
 
-``undefined`` is a value that cannot be strictly evaluated. This is useful for
-a placeholder value, or to signal cases that should not happen.
+``undefined`` is a value that cannot be strictly evaluated. This is
+useful for a placeholder value, or to signal cases that should not
+happen.
 
 It is equivelent to being defined as:
 
 .. code:: python
+
     @thunk.fromvalue
     class undefined(Exception):
         class normalizer(object):
             def __get__(self, instance, owner):
                 raise owner
-
         __strict__ = normalizer()
         del normalizer
 
-When attempting to strictly evaluate this object, an ``undefined`` exception
-will be raised.
+When attempting to strictly evaluate this object, an ``undefined``
+exception will be raised.
 
-NOTE: This object is actually defined in c for trivial gains and prettier stack
-traces.
+NOTE: This object is actually defined in c for trivial gains and
+prettier stack traces.
 
 Gotchas
 -------
 
 I opened it up in the repl, everything is strict!
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Because the python spec says the ``__repr__`` of an object must return a
 ``str``, a call to ``repr`` must strictly evaluate the contents so that
@@ -251,7 +256,7 @@ a bad use case for this, and might make it appear at first like this is
 always strict.
 
 ``print`` didn't do anything!
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Um, what did you think it would do?
 
@@ -284,7 +289,7 @@ function call is converted into a ``thunk``, and therefore we can
 This is true for *any* side-effectful function call.
 
 x is being evaluated strictly when I think it should be lazy
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 There are some cases where things MUST be strict based on the python
 language spec. Because this is not really a new language, just an
@@ -301,7 +306,7 @@ something, open an issue and I will try to address it as soon as
 possible.
 
 Some stateful thing is broken
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sorry, you are using unmanaged state and lazy evaluation, you deserve
 this. ``thunks`` cache the normal form so that calling strict the second
@@ -309,7 +314,7 @@ time will refer to the cached value. If this depended on some stateful
 function, then it will not work as intended.
 
 I tried to do x with a ``thunk`` and it broke!
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The library is probably broken. This was written on a whim and I barely
 thought through the use cases.
@@ -318,7 +323,7 @@ Please open an issue and I will try to get back to you as soon as
 possible.
 
 Notes
-~~~~~
+^^^^^
 
 1. The function call for the constructor will be made lazy in the
    ``LazyTransformer`` (like ``thunk(int, your_thunk)``), so while this
