@@ -23,18 +23,14 @@ ops = Opmap(opmap)
 
 def thunkify(tuple_, *, _thunk_=thunk):
     for t in tuple_ or ():
-        yield _thunk_(lambda t=t: t)
+        yield _thunk_.fromvalue(t)
 
 
 def _const_convert(c, _globals=None):
     if isinstance(c, CodeType):
         return LazyConverter(c, _globals).converted_code
     else:
-        return thunk(lambda c=c: c)
-
-
-def id_(a):
-    return a
+        return thunk.fromvalue(c)
 
 
 def _default(opcode, arg):
@@ -79,9 +75,8 @@ class LazyConverter(object):
         self._names = OrderedDict()
         self._thunk_idx = self.Indexer(self, thunk)
         self._strict_idx = self.Indexer(self, strict)
-        self._id_idx = self.Indexer(self, id_)
+        self._fromvalue_idx = self.Indexer(self, thunk.fromvalue)
         self.transformations = self.LazyTransformations(self)
-        self._co_names = ()
         self._globals = _globals if _globals is not None else f.__globals__
         self._call_args_idx = None
         self._call_kwargs_idx = None
@@ -89,14 +84,10 @@ class LazyConverter(object):
 
     @property
     @lru_cache(1)
-    def _const_consts(self):
+    def _consts(self):
         return tuple(
             _const_convert(c, self._globals) for c in self.code.co_consts
-        ) + (thunk, strict, id_)
-
-    @property
-    def _consts(self):
-        return self._const_consts + tuple(self._names.values())
+        ) + (thunk, strict, thunk.fromvalue)
 
     @property
     def converted_function(self):
@@ -116,7 +107,6 @@ class LazyConverter(object):
         Constructs a lazy code object.
         """
         co = self.code
-        self._co_names = co.co_names
 
         co_varnames = co.co_varnames + (
             isolate_namespace('_call_var'),
@@ -141,7 +131,7 @@ class LazyConverter(object):
             co.co_flags,
             bc,
             self._consts,
-            (),
+            co.co_names,
             co_varnames,
             co.co_filename,
             co.co_name,
@@ -170,43 +160,26 @@ class LazyConverter(object):
 
     transform_MAKE_CLOSURE = transform_MAKE_FUNCTION
 
-    def transform_LOAD_GLOBAL(self, opcode, arg):
-        """
-        There is never a `LOAD_GLOBAL` opcode in a lazy function, it looks
-        up a `thunk` waiting for us the co_consts.
-        """
-        name = self._co_names[arg]
-
-        def _findname(_name=name, _globals=self._globals):
-            return _globals[_name]
-
-        self._names[name] = thunk(_findname)
-
+    def _transform_name(self, opcode, arg):
         yield ops.LOAD_CONST
-        yield (
-            len(self._const_consts) +
-            list(self._names.keys()).index(name)
-        ).to_bytes(2, 'little')
+        yield self._fromvalue_idx
+        yield bytes((opcode,))
+        yield arg.to_bytes(2, 'little')
+        yield ops.CALL_FUNCTION
+        yield b'\x01\x00'
 
-    transform_LOAD_NAME = transform_LOAD_GLOBAL
+    transform_LOAD_NAME = transform_LOAD_GLOBAL = _transform_name
 
     def transform_LOAD_FAST(self, opcode, arg):
         if arg > self._co_total_argcount:
             yield from _default(opcode, arg)
-            return
-
-        yield ops.LOAD_CONST
-        yield self._thunk_idx
-        yield ops.LOAD_CONST
-        yield self._id_idx
-        yield ops.LOAD_FAST
-        yield arg.to_bytes(2, 'little')
-        yield ops.CALL_FUNCTION
-        yield b'\x02\x00'
+        else:
+            yield from self._transform_name(opcode, arg)
 
 
 def lazy_function(f):
     """
     Creates a function whose body is lazily evaluated.
+    Returns the function as a thunk.
     """
-    return LazyConverter(f).converted_function
+    return thunk.fromvalue(LazyConverter(f).converted_function)
