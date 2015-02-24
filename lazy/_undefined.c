@@ -1,14 +1,6 @@
 #include <Python.h>
 
 static PyObject *
-no_new(PyObject *self, PyObject *args, PyObject *kwargs)
-{
-    PyErr_SetString(PyExc_ValueError,
-                    "Cannot create instances.");
-    return NULL;
-}
-
-static PyObject *
 undefined_strict(PyObject *self, PyObject *instance, PyObject *owner)
 {
     PyErr_SetObject(owner, instance);
@@ -53,9 +45,8 @@ PyTypeObject undefined_strict_descr = {
     0,                                          /* tp_dictoffset */
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
-    (newfunc) no_new,                           /* tp_new */
+    0,                                          /* tp_new */
 };
-
 
 PyDoc_STRVAR(module_doc,"An undefined value.");
 
@@ -77,7 +68,11 @@ PyInit__undefined(void)
     PyObject *m;
     PyObject *strict;
     PyObject *dict_;
+    PyObject *undefined_inner;
     PyObject *undefined;
+    PyObject *thunk;
+    PyObject *thunk_fromvalue;
+    int err;
 
     if (PyType_Ready(&undefined_strict_descr)) {
         return NULL;
@@ -92,15 +87,45 @@ PyInit__undefined(void)
         return NULL;
     }
 
-    if (PyDict_SetItemString(dict_, "__strict__", strict)) {
+    err = PyDict_SetItemString(dict_, "__strict__", strict);
+    Py_DECREF(strict);
+    if (err) {
         Py_DECREF(dict_);
         return NULL;
     }
 
-    if (!(undefined = PyErr_NewException("lazy._undefined.undefined",
-                                         NULL,
-                                         dict_))) {
-        Py_DECREF(dict_);
+    undefined_inner = PyErr_NewException(
+        "lazy._undefined.undefined", NULL, dict_);
+
+    Py_DECREF(dict_);
+    if (!undefined_inner) {
+        return NULL;
+    }
+
+    if (!(m = PyImport_ImportModule("lazy._thunk"))) {
+        Py_DECREF(undefined_inner);
+        return NULL;
+    }
+
+    thunk = PyObject_GetAttrString(m, "thunk");
+    Py_DECREF(m);
+    if (!thunk) {
+        Py_DECREF(undefined_inner);
+        return NULL;
+    }
+
+    thunk_fromvalue = PyObject_GetAttrString(thunk, "fromvalue");
+    Py_DECREF(thunk);
+    if (!thunk_fromvalue) {
+        Py_DECREF(undefined_inner);
+        return NULL;
+    }
+    undefined = PyObject_CallFunctionObjArgs(thunk_fromvalue,
+                                             undefined_inner,
+                                             NULL);
+    Py_DECREF(thunk_fromvalue);
+    Py_DECREF(undefined_inner);
+    if (!undefined) {
         return NULL;
     }
 
@@ -110,7 +135,6 @@ PyInit__undefined(void)
 
     if (PyObject_SetAttrString(m, "undefined", undefined)) {
         Py_DECREF(m);
-        Py_DECREF(strict);
         return NULL;
     }
 
