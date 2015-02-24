@@ -66,6 +66,37 @@ This is implemented at the bytecode level to frontload a large part of the cost
 of using the lazy machinery. There is very little overhead at function call
 time as most of the overhead was spent at function creation (definiton) time.
 
+We can use ``strict`` to strictly get values from a lazy function. for example:
+
+.. code:: python
+
+    >>> @lazy_function
+    ... def f():
+    ...    print('test')
+    ...
+    >>> strict(f())
+
+As we can see, ``f`` did not print 'test' or return a value; however we can use
+strict inside a lazy function to force the side effect.
+
+.. code:: python
+
+    >>> @lazy_function
+    ... def f():
+    ...    strict(print('test'))
+    ...
+    >>> strict(f())
+    test
+    >>> a = f()
+    >>> strict(a)
+    test
+
+Here we can see how strict works inside the function. strict causes the
+argument to be strictly evaluated, forcing the result of print and causing the
+side effect. Also, we can see that just calling ``f`` does not trigger this
+event, we also need to force the results of ``f`` before it's body is
+evaluated.
+
 ``run_lazy``
 ^^^^^^^^^^^^
 
