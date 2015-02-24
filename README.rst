@@ -190,8 +190,8 @@ prevents the object from getting wrapped in thunks allowing you to
 create strict data structures.
 
 Objects may also define a ``__strict__`` attribute that defines how to
-strictly evalueate the object. For example, ``undefined`` can be defined
-as:
+strictly evaluate the object. For example, an object that should be equal to 5
+can be defined as:
 
 .. code:: python
 
@@ -202,6 +202,30 @@ as:
 
 This would make ``strict(StrictFive())`` return 5 instead of an instance
 of ``StrictFive``.
+
+``undefined``
+~~~~~~~~~~~~~
+
+``undefined`` is a value that cannot be strictly evaluated. This is useful for
+a placeholder value, or to signal cases that should not happen.
+
+It is equivelent to being defined as:
+
+.. code:: python
+    @thunk.fromvalue
+    class undefined(Exception):
+        class normalizer(object):
+            def __get__(self, instance, owner):
+                raise owner
+
+        __strict__ = normalizer()
+        del normalizer
+
+When attempting to strictly evaluate this object, an ``undefined`` exception
+will be raised.
+
+NOTE: This object is actually defined in c for trivial gains and prettier stack
+traces.
 
 Gotchas
 -------
