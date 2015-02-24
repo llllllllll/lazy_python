@@ -5,7 +5,7 @@ from lazy.bytecode import lazy_function
 from lazy.runtime import run_lazy
 from lazy.transformer import LazyTransformer
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 __all__ = [
     'LazyTransformer',
