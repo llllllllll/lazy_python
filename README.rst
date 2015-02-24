@@ -26,8 +26,45 @@ How to lazy?
 
 There are 2 means of using lazy code:
 
-1. ``run_lazy``
-2. ``lazy_function``
+1. ``lazy_function``
+2. ``run_lazy``
+
+``lazy_function``
+^^^^^^^^^^^^^^^^^
+
+``lazy_function`` takes a python function and returns a new function that is
+the lazy version. This can be used as a decorator.
+
+Example:
+
+.. code:: python
+
+    @lazy_function
+    def f(a, b):
+        return a + b
+
+Calling ``f(1, 2)`` will return a ``thunk`` that will add 1 and 2 when it
+needs to be strict. Doing anything with the returned thunk will keep
+chaining on more computations until it must be strictly evaluated.
+
+Lazy functions allow for lexical closures also:
+
+.. code:: python
+
+    @lazy_function
+    def f(a):
+        def g(b):
+            return a + b
+        return g
+
+When we call ``f(1)`` we will get back a ``thunk`` like we would expect;
+however, this thunk is wrapping the function ``g``. Because ``g`` was created
+in a lazy context, it will also be a ``lazy_function`` implicitly. This means
+that ``type(f(1)(2))`` is ``thunk``; but, ``f(1)(2) == 3``.
+
+This is implemented at the bytecode level to frontload a large part of the cost
+of using the lazy machinery. There is very little overhead at function call
+time as most of the overhead was spent at function creation (definiton) time.
 
 ``run_lazy``
 ^^^^^^^^^^^^
@@ -48,31 +85,12 @@ Example:
     >>> run_lazy(code)
     lazy
 
-``lazy_function``
-^^^^^^^^^^^^^^^^^
-
-We can also use the ``lazy_function`` decorator. This is a hackier
-approach, not that any is very good. Functions constructed with the
-``lazy_function`` decorator will return ``thunk`` objects which will be
-the deferred computation for the function. Internally, things are kept
-lazy. Arguments will still be computed with the strictness of the
-calling scope.
-
-This means that if I call a ``lazy_function`` from normal python, the
-arguments will be strictly evaluated before being passed into the lazy
-python function; however, *all* function calls are lazy in lazy python.
-
-Example:
-
-.. code:: python
-
-    @lazy_function
-    def f(a, b):
-        return a + b
-
-Calling f(1, 2) will return a ``thunk`` that will add 1 and 2 when it
-needs to be strict. Doing anything with the returned thunk will keep
-chaining on more computations until it must be strictly evaluated.
+This version of running lazy code uses an AST transformer to restructure the
+code. This means that there is a far greater runtime overhead to using this
+method of executing lazy python; however, it allows us to write code outside
+the body of a function. Just like ``exec`` should be avoided when possible, it
+is prefered that users implement lazy code with ``lazy_function`` instead of
+``run_lazy``.
 
 ``thunk``
 ~~~~~~~~~
@@ -81,9 +99,14 @@ At it's core, lazy is just a way of converting expressions into a tree
 of deferred computation objects called ``thunk``\ s. thunks wrap normal
 functions by not evaluating them until the value is needed. A ``thunk``
 wrapped function can accept ``thunk``\ s as arguments; this is how the
-tree is built.
-
-``thunk``\ s represent the weak head normal form of an expression.
+tree is built. Some computations cannot be deferred because there is some state
+that is needed to construct the thunk, or the python standard defines the
+return of some method to be a specific type. These are refered to as 'strict
+points'. Examples of strict points are ``str`` and ``bool`` because the python
+standard says that these functions must return an instance of their own
+type. Most of these converters are strict; however, some other things are
+strict because it solves recursion issues in the interpreter, like accessing
+``__class__`` on a thunk.
 
 ``LazyTransformer``
 ~~~~~~~~~~~~~~~~~~~
