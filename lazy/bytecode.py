@@ -1,4 +1,4 @@
-from dis import Bytecode, opmap
+from dis import Bytecode, opmap, hasjabs
 from operator import is_, not_
 from types import CodeType, FunctionType
 
@@ -30,15 +30,6 @@ def _const_convert(c, _globals=None):
         return LazyConverter(c, _globals).converted_code
     else:
         return thunk.fromvalue(c)
-
-
-def _default(opcode, arg):
-    """
-    The default opcode behavior.
-    """
-    yield bytes((opcode,))
-    if arg is not None:
-        yield arg.to_bytes(2, 'little')
 
 
 def _lazy_is(a, b, *, is_=is_):
@@ -83,7 +74,9 @@ class LazyConverter(object):
 
         def __getitem__(self, opname):
             return getattr(
-                self._converter, 'transform_' + opname, _default,
+                self._converter,
+                'transform_' + opname,
+                self._converter._default,
             )
 
         def __getattr__(self, opname):
@@ -103,6 +96,15 @@ class LazyConverter(object):
         self._call_args_idx = None
         self._call_kwargs_idx = None
         self._co_total_argcount = None
+        self._jmp_targets = {}
+
+    def _default(self, opcode, arg):
+        """
+        The default opcode behavior.
+        """
+        yield bytes((opcode,))
+        if arg is not None:
+            yield arg.to_bytes(2, 'little')
 
     @property
     def converted_function(self):
@@ -133,7 +135,7 @@ class LazyConverter(object):
         self._call_args_idx = (len_co_varnames - 2).to_bytes(2, 'little')
         self._co_total_argcount = co.co_argcount + co.co_kwonlyargcount
 
-        bc = b''.join(self._lazy_bytecode)
+        bc = b''.join(self._fix_abs_offsets(self._lazy_bytecode))
 
         return CodeType(
             co.co_argcount,
@@ -153,13 +155,28 @@ class LazyConverter(object):
             co.co_cellvars,
         )
 
+    def _fix_abs_offsets(self, bc):
+        it = iter(tuple(bc))
+        for b in it:
+            yield b
+
+            if int.from_bytes(b, 'little') in hasjabs:
+                offset = next(it)
+                yield self._jmp_targets[int.from_bytes(offset, 'little')]
+
     @property
     def _lazy_bytecode(self):
         """
         Applies the lazy bytecode transformations.
         """
+        new_idx = 0
         for b in Bytecode(self.code):
-            yield from self.transformations[b.opname](b.opcode, b.arg)
+            if b.is_jump_target:
+                self._jmp_targets[b.offset] = new_idx.to_bytes(2, 'little')
+
+            for t in self.transformations[b.opname](b.opcode, b.arg):
+                new_idx += len(t)
+                yield t
 
     def transform_MAKE_FUNCTION(self, opcode, arg):
         """
@@ -167,11 +184,20 @@ class LazyConverter(object):
         """
         yield ops.LOAD_CONST
         yield self._consts.index(strict)
+        # TOS  = strict
+        # TOS1 = func_name
+
         yield ops.ROT_TWO
+        # TOS  = func_name
+        # TOS1 = strict
+
         yield ops.CALL_FUNCTION
         yield b'\x01\x00'
+        # TOS  = strict(func_name)
+
         yield bytes((opcode,))
         yield arg.to_bytes(2, 'little')
+        # TOS  = new_function
 
     transform_MAKE_CLOSURE = transform_MAKE_FUNCTION
 
@@ -181,10 +207,16 @@ class LazyConverter(object):
         """
         yield ops.LOAD_CONST
         yield self._consts.index(thunk.fromvalue)
+        # TOS  = thunk.fromvalue
+
         yield bytes((opcode,))
         yield arg.to_bytes(2, 'little')
+        # TOS  = value
+        # TOS1 = thunk.fromvalue
+
         yield ops.CALL_FUNCTION
         yield b'\x01\x00'
+        # TOS  = thunk.fromvalue(value)
 
     transform_LOAD_NAME = transform_LOAD_GLOBAL = _transform_name
 
@@ -193,7 +225,7 @@ class LazyConverter(object):
         Wrap arg lookups in thunks to be safe.
         """
         if arg > self._co_total_argcount:
-            yield from _default(opcode, arg)
+            yield from self._default(opcode, arg)
         else:
             yield from self._transform_name(opcode, arg)
 
@@ -203,14 +235,26 @@ class LazyConverter(object):
         This makes `is` lazy.
         """
         if arg != 8:  # is
-            yield from _default(opcode, arg)
+            yield from self._default(opcode, arg)
             return
 
         yield ops.LOAD_CONST
         yield self._consts.index(_lazy_is)
+        # TOS  = _lazy_is
+        # TOS1 = a
+        # TOS2 = b
+
+        # This safe to do because `is` is commutative 100% of the time.
+        # We are doing a pointer compare so we can move the operands around.
+        # This saves us from doing an extra ROT_TWO to preserve the order.
         yield ops.ROT_THREE
+        # TOS  = a
+        # TOS1 = b
+        # TOS2 = _lazy_is
+
         yield ops.CALL_FUNCTION
         yield b'\x02\x00'
+        # TOS  = _lazy_is(b, a)
 
     def transform_UNARY_NOT(self, opcode, arg):
         """
@@ -220,9 +264,16 @@ class LazyConverter(object):
         """
         yield ops.LOAD_CONST
         yield self._consts.index(_lazy_not)
+        # TOS  = _lazy_not
+        # TOS1 = arg
+
         yield ops.ROT_TWO
+        # TOS  = arg
+        # TOS1 = _lazy_not
+
         yield ops.CALL_FUNCTION
         yield b'\x01\x00'
+        # TOS  = _lazy_not(arg)
 
 
 def lazy_function(f):
