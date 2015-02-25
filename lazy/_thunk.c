@@ -909,6 +909,21 @@ _id(PyObject *a)
     return a;
 }
 
+/* Returns the _id_callable singleton.
+   return: A new reference. */
+static PyObject *
+_get_id(void)
+{
+    static PyObject *_id_callable = NULL;
+
+    if (!_id_callable && !(_id_callable = unarywrapper_from_func(_id))) {
+        return NULL;
+    }
+
+    Py_INCREF(_id_callable);
+    return _id_callable;
+}
+
 static PyObject *
 thunk_next(thunk *self)
 {
@@ -917,7 +932,7 @@ thunk_next(thunk *self)
     PyObject *tmp;
     PyObject *ret;
 
-    if (!(fn = unarywrapper_from_func(_id))) {
+    if (!(fn = _get_id())) {
         return NULL;
     }
 
@@ -1027,7 +1042,7 @@ thunk_fromvalue(PyObject *cls, PyObject *value)
         return value;
     }
 
-    if (!(fn = unarywrapper_from_func(_id))) {
+    if (!(fn = _get_id())) {
         return NULL;
     }
 
