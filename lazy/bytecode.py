@@ -1,6 +1,4 @@
-from collections import OrderedDict
 from dis import Bytecode, opmap
-from functools import lru_cache
 from operator import is_, not_
 from types import CodeType, FunctionType
 
