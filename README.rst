@@ -128,7 +128,7 @@ is prefered that users implement lazy code with ``lazy_function`` instead of
 ``thunk``
 ~~~~~~~~~
 
-At it's core, lazy is just a way of converting expressions into a tree
+At its core, lazy is just a way of converting expressions into a tree
 of deferred computation objects called ``thunk``\ s. thunks wrap normal
 functions by not evaluating them until the value is needed. A ``thunk``
 wrapped function can accept ``thunk``\ s as arguments; this is how the
