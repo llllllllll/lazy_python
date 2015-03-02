@@ -232,17 +232,6 @@ Known Issues
 
 Currently, the following things are known to not work:
 
-Relative Jumps inside ``lazy_function``\ s
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This means loops and blocks will probably not work. These still work as
-intended with ``run_lazy``.
-
-This issue will cause a segfault in the interpreter.
-
-Status: Bug, will fix.
-
-
 Recursivly defined ``thunk``\ s
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
