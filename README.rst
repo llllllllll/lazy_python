@@ -232,10 +232,10 @@ Known Issues
 
 Currently, the following things are known to not work:
 
-Recursivly defined ``thunk``\ s
+Recursively defined ``thunk``\ s
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A recursivly defined ``thunk`` is a thunk that appears in its own graph twice.
+A recursively defined ``thunk`` is a thunk that appears in its own graph twice.
 For example:
 
 .. code:: python
