@@ -233,7 +233,7 @@ Known Issues
 Currently, the following things are known to not work:
 
 Recursively defined ``thunk``\ s
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A recursively defined ``thunk`` is a thunk that appears in its own graph twice.
 For example:

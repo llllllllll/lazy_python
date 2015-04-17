@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from distutils.core import Extension, setup
+from setuptools import setup, Extension
 import sys
 
 long_description = ''
