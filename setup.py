@@ -34,6 +34,6 @@ setup(
         Extension('lazy._thunk', ['lazy/_thunk.c']),
     ],
     install_requires=[
-        'codetransformer>=0.1.1.1',
+        'codetransformer==0.2.0',
     ],
 )
