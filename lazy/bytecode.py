@@ -15,10 +15,6 @@ def _lazy_not(a, *, not_=not_):
 
 
 class LazyTransformer(CodeTransformer):
-    @property
-    def stack_modifier(self):
-        return 1
-
     def visit_const(self, const):
         const = super().visit_const(const)
         if not isinstance(const, CodeType):
