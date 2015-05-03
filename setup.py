@@ -10,7 +10,7 @@ if 'upload' in sys.argv:
 
 setup(
     name='lazy_python',
-    version='0.1.9',
+    version='0.1.10',
     description='Lazy evaluation for python 3',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',

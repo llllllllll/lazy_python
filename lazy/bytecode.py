@@ -14,7 +14,23 @@ def _lazy_not(a, *, not_=not_):
     return thunk(not_, a)
 
 
-class LazyTransformer(CodeTransformer):
+class _lazy_function_transformer(CodeTransformer):
+    """
+    Transform a strict python function into a lazy function.
+    """
+    __name__ = 'lazy_function'
+
+    def __call__(self, f):
+        return thunk.fromvalue(
+            FunctionType(
+                self.visit(f.__code__),
+                f.__globals__,
+                f.__name__,
+                tuple(map(thunk.fromvalue, f.__defaults__ or ())),
+                f.__closure__,
+            ),
+        )
+
     def visit_const(self, const):
         const = super().visit_const(const)
         if not isinstance(const, CodeType):
@@ -102,13 +118,4 @@ class LazyTransformer(CodeTransformer):
         # TOS = _lazy_not(arg)
 
 
-def lazy_function(f):
-    return thunk.fromvalue(
-        FunctionType(
-            LazyTransformer().visit(f.__code__),
-            f.__globals__,
-            f.__name__,
-            tuple(map(thunk.fromvalue, f.__defaults__ or ())),
-            f.__closure__,
-        ),
-    )
+lazy_function = _lazy_function_transformer()
