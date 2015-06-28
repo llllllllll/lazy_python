@@ -10,7 +10,7 @@ if 'upload' in sys.argv:
 
 setup(
     name='lazy_python',
-    version='0.1.10',
+    version='0.1.11',
     description='Lazy evaluation for python 3',
     author='Joe Jevnik',
     author_email='joejev@gmail.com',
@@ -34,6 +34,6 @@ setup(
         Extension('lazy._thunk', ['lazy/_thunk.c']),
     ],
     install_requires=[
-        'codetransformer==0.2.0',
+        'codetransformer>=0.4.4',
     ],
 )

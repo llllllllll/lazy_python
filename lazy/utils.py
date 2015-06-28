@@ -47,3 +47,10 @@ def singleton(cls):
 
     cls.__new__ = __new__
     return cls
+
+
+def instance(cls):
+    """
+    Class decorator for creating single instances.
+    """
+    return cls()
