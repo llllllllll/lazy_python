@@ -10,4 +10,4 @@ before_script:
  - flake8 lazy/
 
 script:
- - nosetests
+ - py.test
