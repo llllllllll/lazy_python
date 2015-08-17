@@ -1,8 +1,21 @@
 from operator import is_, not_
 from types import CodeType, FunctionType
 
-from codetransformer import CodeTransformer
-from codetransformer.instructions import ROT_TWO, ROT_THREE, CALL_FUNCTION
+from codetransformer import CodeTransformer, Code, pattern
+from codetransformer.instructions import (
+    CALL_FUNCTION,
+    COMPARE_OP,
+    LOAD_CONST,
+    LOAD_FAST,
+    LOAD_GLOBAL,
+    LOAD_NAME,
+    MAKE_CLOSURE,
+    MAKE_FUNCTION,
+    ROT_THREE,
+    ROT_TWO,
+    UNARY_NOT
+)
+
 
 from lazy._thunk import strict, thunk
 from lazy.utils import instance
@@ -26,7 +39,7 @@ class lazy_function(CodeTransformer):
     def __call__(self, f):
         return thunk.fromvalue(
             FunctionType(
-                self.visit(f.__code__),
+                self.transform(Code.from_pycode(f.__code__)).to_pycode(),
                 f.__globals__,
                 f.__name__,
                 tuple(map(thunk.fromvalue, f.__defaults__ or ())),
@@ -34,17 +47,18 @@ class lazy_function(CodeTransformer):
             ),
         )
 
-    def visit_consts(self, consts):
+    def transform_consts(self, consts):
         return tuple(
             const if isinstance(const, CodeType) else thunk.fromvalue(const)
-            for const in super().visit_consts(consts)
+            for const in super().transform_consts(consts)
         )
 
-    def visit_MAKE_FUNCTION(self, instr):
+    @pattern(MAKE_FUNCTION | MAKE_CLOSURE)
+    def _make_function(self, instr):
         """
         Functions should have strict names.
         """
-        yield self.LOAD_CONST(strict).steal(instr)
+        yield LOAD_CONST(strict).steal(instr)
         # TOS = strict
         # TOS1 = func_name
 
@@ -58,13 +72,12 @@ class lazy_function(CodeTransformer):
         yield instr
         # TOS = new_function
 
-    visit_MAKE_CLOSURE = visit_MAKE_FUNCTION
-
-    def _visit_load_name(self, instr):
+    @pattern(LOAD_NAME | LOAD_GLOBAL | LOAD_FAST)
+    def _load_name(self, instr):
         """
         Loading a name immediatly wraps it in a `thunk`.
         """
-        yield self.LOAD_CONST(thunk.fromvalue).steal(instr)
+        yield LOAD_CONST(thunk.fromvalue).steal(instr)
         # TOS = thunk.fromvalue
 
         yield instr
@@ -74,18 +87,17 @@ class lazy_function(CodeTransformer):
         yield CALL_FUNCTION(1)
         # TOS = thunk.fromvalue(value)
 
-    visit_LOAD_NAME = visit_LOAD_GLOBAL = visit_LOAD_FAST = _visit_load_name
-
-    def visit_COMPARE_OP(self, instr):
+    @pattern(COMPARE_OP)
+    def _compare_op(self, instr):
         """
         Replace the `is` operator to act on the values the thunks represent.
         This makes `is` lazy.
         """
         if instr.arg != 8:  # is
-            yield from self.visit_generic(instr)
+            yield instr
             return
 
-        yield self.LOAD_CONST(_lazy_is).steal(instr)
+        yield LOAD_CONST(_lazy_is).steal(instr)
         # TOS  = _lazy_is
         # TOS1 = a
         # TOS2 = b
@@ -101,13 +113,14 @@ class lazy_function(CodeTransformer):
         yield CALL_FUNCTION(2)
         # TOS = _lazy_is(b, a)
 
-    def visit_UNARY_NOT(self, instr):
+    @pattern(UNARY_NOT)
+    def _unary_not(self, instr):
         """
         Replace the `not` operator to act on the values that the thunks
         represent.
         This makes `not` lazy.
         """
-        yield self.LOAD_CONST(_lazy_not).steal(instr)
+        yield LOAD_CONST(_lazy_not).steal(instr)
         # TOS  = _lazy_not
         # TOS1 = arg
 

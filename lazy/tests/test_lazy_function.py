@@ -1,5 +1,3 @@
-from unittest import TestCase
-
 from lazy import thunk, strict, lazy_function
 
 
@@ -10,70 +8,72 @@ def f(a, b):
     return a + b
 
 
-class LazyFunctionTestCase(TestCase):
-    def test_is_lazy(self):
-        self.assertIsInstance(f(1, 2), thunk)
+def test_is_lazy():
+    assert isinstance(f(1, 2), thunk)
 
-    def test_not_decorator(self):
-        def g(a, b):
-            return a - b
 
-        g = lazy_function(g)
+def test_not_decorator():
+    def g(a, b):
+        return a - b
 
-        self.assertIsInstance(g(1, 2), thunk)
+    g = lazy_function(g)
+    assert isinstance(g(1, 2), thunk)
 
-    def test_lazy_call(self):
-        called = False
 
-        @lazy_function
-        def g():
-            nonlocal called
-            called = True
+def test_lazy_call():
+    called = False
 
-        result = g()
-        self.assertFalse(called, 'The function call was strict')
+    @lazy_function
+    def g():
+        nonlocal called
+        called = True
 
-        strict(result)
-        self.assertTrue(called, 'The function call did not evaluate')
+    result = g()
+    assert not called
 
-    def test_is(self):
-        @lazy_function
-        def g():
-            return 1 is 1
+    strict(result)
+    assert called
 
-        a = g()
-        self.assertIsInstance(a, thunk)
-        self.assertTrue(strict(a))
 
-        @lazy_function
-        def h(a):
-            return a is None
+def test_is():
+    @lazy_function
+    def g():
+        return 1 is 1
 
-        b = h(None)
-        self.assertIsInstance(b, thunk)
-        self.assertTrue(strict(b))
+    a = g()
+    assert isinstance(a, thunk)
+    assert strict(a)
 
-        c = h('not none')
-        self.assertIsInstance(c, thunk)
-        self.assertFalse(strict(c))
+    @lazy_function
+    def h(a):
+        return a is None
 
-    def test_not(self):
-        @lazy_function
-        def g():
-            return not 1
+    b = h(None)
+    assert isinstance(b, thunk)
+    assert strict(b)
 
-        a = g()
-        self.assertIsInstance(a, thunk)
-        self.assertFalse(strict(a))
+    c = h('not none')
+    assert isinstance(c, thunk)
+    assert not strict(c)
 
-        @lazy_function
-        def h(a):
-            return not a
 
-        b = h(False)
-        self.assertIsInstance(b, thunk)
-        self.assertTrue(strict(b))
+def test_not():
+    @lazy_function
+    def g():
+        return not 1
 
-        c = h(True)
-        self.assertIsInstance(c, thunk)
-        self.assertFalse(strict(c))
+    a = g()
+    assert isinstance(a, thunk)
+    assert not strict(a)
+
+    @lazy_function
+    def h(a):
+        return not a
+
+    b = h(False)
+    assert isinstance(b, thunk)
+    assert strict(b)
+
+    c = h(True)
+    assert isinstance(c, thunk)
+    assert not strict(c)

@@ -191,14 +191,13 @@ To create custom strict objects, you can subclass ``strict``. This
 prevents the object from getting wrapped in thunks allowing you to
 create strict data structures.
 
-Objects may also define a ``__strict__`` attribute that defines how to
+Objects may also define a ``__strict__`` method that defines how to
 strictly evalueate the object. For example, an object could be defined
 as:
 
 .. code:: python
 
     class StrictFive(object):
-        @property
         def __strict__(self):
             return 5
 

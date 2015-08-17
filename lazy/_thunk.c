@@ -350,23 +350,40 @@ static PyTypeObject strict_type;
 static PyObject *
 strict_eval(PyObject *th)
 {
+    static PyObject *strict_name;
     PyObject *normal;
+    PyObject *strict_method = NULL;
 
     if (PyObject_IsInstance(th, (PyObject*)  &thunk_type)) {
         if (!(normal = _strict_eval_borrowed(th))) {
             return NULL;
         }
     }
-    else if (!(normal = PyObject_GetAttrString(th, "__strict__"))) {
-        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-            PyErr_Clear();
-            normal = th;
+    else {
+        if (!(strict_name ||
+              (strict_name = PyUnicode_FromString("__strict__")))) {
+                return NULL;
         }
-        else {
+        if (!(strict_method = PyObject_GetAttr((PyObject*) Py_TYPE(th),
+                                               strict_name))) {
+            if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+                PyErr_Clear();
+                normal = th;
+            }
+            else {
+                return NULL;
+            }
+        }
+        else if (!(normal = PyObject_CallFunctionObjArgs(strict_method,
+                                                         th,
+                                                         NULL))) {
+            Py_DECREF(strict_method);
             return NULL;
         }
+        else {
+            Py_XDECREF(strict_method);
+        }
     }
-
     Py_INCREF(normal);
     return normal;
 }

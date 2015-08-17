@@ -1,8 +1,8 @@
-from lazy.data.list_ import LazyList, Cons, nil
+from lazy.data.list_ import L, Cons, nil
 
 
 __all__ = [
-    'LazyList',
+    'L',
     'Cons',
     'nil',
 ]

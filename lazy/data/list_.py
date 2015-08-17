@@ -1,10 +1,23 @@
 from abc import ABCMeta, abstractmethod
 
 from lazy._thunk import strict
-from lazy.utils import singleton
 
 
-class LazyList(metaclass=ABCMeta):
+class LMeta(ABCMeta):
+    def __getitem__(self, literal):
+        if not isinstance(literal, tuple):
+            raise TypeError('invalid L literal')
+
+        if not literal:
+            return nil
+
+        if len(literal) in (2, 3, 4) and literal[1] is ...:
+            return _from_iter(_enum_from_to_by(literal[0], *literal[2:]))
+
+        return _from_iter(iter(literal))
+
+
+class L(metaclass=LMeta):
     def __repr__(self):
         return repr(strict(self))
 
@@ -27,13 +40,15 @@ class LazyList(metaclass=ABCMeta):
     def __iter__(self):
         raise NotImplementedError('__iter__')
 
+    def __eq__(self, other):
+        return strict(self) == strict(other)
 
-@singleton
-class NilType(LazyList):
-    def __init__(self):
-        pass
 
-    @property
+@object.__new__
+class nil(L):
+    def __new__(cls):
+        raise TypeError("cannot create 'nil' instances")
+
     def __strict__(self):
         return ()
 
@@ -46,22 +61,35 @@ class NilType(LazyList):
     def __iter__(self):
         return iter(())
 
-nil = NilType()
+    def __call__(self):
+        return self
 
 
-class Cons(LazyList):
+class Cons(L):
+    __slots__ = '_car', '_cdr', '_cdr_callable'
+
     def __init__(self, car, cdr):
         self._car = car
-        self._cdr = cdr
+        self._cdr_callable = (lambda: cdr) if isinstance(cdr, Cons) else cdr
 
     @property
-    def __strict__(self):
-        return self._normal_form()
+    def car(self):
+        return self._car
 
-    def _normal_form(self):
-        ns = (self._car,) + strict(self._cdr)
-        self._normal_form = lambda: ns
-        return ns
+    @property
+    def cdr(self):
+        try:
+            return self._cdr
+        except AttributeError:
+            self._cdr = cdr = self._cdr_callable()
+            return cdr
+
+    def __strict__(self):
+        try:
+            return self._strict
+        except AttributeError:
+            self._strict = ns = (strict(self.car),) + strict(self.cdr)
+            return ns
 
     def __getitem__(self, key):
         key = strict(key.__index__())
@@ -69,15 +97,35 @@ class Cons(LazyList):
             key = len(self) + key
 
         if key == 0:
-            return self._car
+            return self.car
         else:
-            return self._cdr[key - 1]
+            return self.cdr[key - 1]
 
     def __len__(self):
         return len(strict(self))
 
     def __iter__(self):
         a = self
-        while not isinstance(a, NilType):
-            yield a._car
-            a = a._cdr
+        while a is not nil:
+            yield a.car
+            a = a.cdr
+
+
+def _enum_from_to_by(from_, to=None, by=1):
+    if to is not None:
+        while from_ <= to:
+            yield from_
+            from_ += by
+    else:
+        while True:
+            yield from_
+            from_ += by
+
+
+def _from_iter(it):
+    try:
+        car = next(it)
+    except StopIteration:
+        return nil
+
+    return Cons(car, lambda: _from_iter(it))

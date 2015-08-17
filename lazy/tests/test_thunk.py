@@ -1,6 +1,8 @@
+from itertools import starmap
 import math
 import operator
-from unittest import TestCase
+
+import pytest
 
 from lazy import thunk, strict
 
@@ -10,45 +12,22 @@ reflect_implicit = object()
 magic_class = object()
 
 
-class MagicTestDispatchMeta(type):
-    """
-    For handling the construction of the magic test list.
-    """
-    def __new__(mcls, name, bases, dict_):
-        for func, args in dict_.get('test_operators_lazy', ()):
-            name = func.__name__
+def prep_magic_func_args(func, args):
+    try:
+        first_arg = args[0]
+    except IndexError:
+        first_arg = None
 
-            try:
-                first_arg = args[0]
-            except IndexError:
-                first_arg = None
+    if first_arg is no_implicit_thunk:
+        args = args[1:]
+    elif first_arg is reflect_implicit:
+        args = args[1:] + (thunk(object),)
+    elif first_arg is magic_class:
+        args = (class_factory(func)(),)
+    else:
+        args = (thunk(object),) + args[1:]
 
-            if first_arg is no_implicit_thunk:
-                args = args[1:]
-            elif first_arg is reflect_implicit:
-                args = args[1:] + (thunk(object),)
-            elif first_arg is magic_class:
-                args = (class_factory(func)(),)
-            else:
-                args = (thunk(object),) + args[1:]
-
-            full_name = 'test_%s_lazy' % name
-            dict_[full_name] = _test_magic_func(func, full_name, args)
-
-        return type.__new__(mcls, name, bases, dict_)
-
-
-def _test_magic_func(f, name, args):
-    """
-    The actual test case for a the magic inner type.
-    """
-    def wrapper(self):
-        a = thunk(f, *args)
-        with self.assertRaises(TypeError):
-            strict(a)
-
-    wrapper.__name__ = name
-    return wrapper
+    return func, args
 
 
 def class_factory(func):
@@ -79,161 +58,166 @@ def call(f, *args, **kwargs):
     return f(*args, **kwargs)
 
 
-class ThunkTestCase(TestCase, metaclass=MagicTestDispatchMeta):
-    def test_laziness(self):
-        def raiser():
-            raise ValueError('raiser raised')
+@pytest.mark.parametrize('f,args', starmap(prep_magic_func_args, (
+    (operator.eq, (thunk(object),)),
+    (operator.ne, (thunk(object),)),
+    (operator.lt, (thunk(object),)),
+    (operator.gt, (thunk(object),)),
+    (operator.le, (thunk(object),)),
+    (operator.ge, (thunk(object),)),
+    (operator.pos, ()),
+    (operator.neg, ()),
+    (abs, ()),
+    (operator.invert, ()),
+    (round, ()),
+    (math.floor, ()),
+    (math.ceil, ()),
+    (math.trunc, (magic_class,)),
+    (operator.add, (int(),)),
+    (operator.add, (reflect_implicit, int())),
+    (operator.iadd, ()),
+    (operator.sub, (int(),)),
+    (operator.sub, (reflect_implicit, int())),
+    (operator.isub, ()),
+    (operator.mul, (int(),)),
+    (operator.mul, (reflect_implicit, int())),
+    (operator.imul, ()),
+    (operator.floordiv, (int(),)),
+    (operator.floordiv, (reflect_implicit, int())),
+    (operator.ifloordiv, (int(),)),
+    (operator.truediv, (int(),)),
+    (operator.truediv, (reflect_implicit, int())),
+    (operator.itruediv, (int(),)),
+    (operator.mod, (int(),)),
+    (operator.mod, (reflect_implicit, int())),
+    (operator.imod, (int(),)),
+    (divmod, (int(),)),
+    (divmod, (reflect_implicit, int())),
+    (pow, (int(),)),
+    (pow, (reflect_implicit, int()),),
+    (operator.ipow, ()),
+    (operator.lshift, (int(),)),
+    (operator.lshift, (reflect_implicit, int())),
+    (operator.ilshift, ()),
+    (operator.rshift, (int(),)),
+    (operator.rshift, (reflect_implicit, int())),
+    (operator.irshift, ()),
+    (operator.and_, (int(),)),
+    (operator.and_, (reflect_implicit, int())),
+    (operator.iand, ()),
+    (operator.or_, (int(),)),
+    (operator.or_, (reflect_implicit, int())),
+    (operator.ior, ()),
+    (operator.xor, (int(),)),
+    (operator.xor, (reflect_implicit, int())),
+    (operator.ixor, (int(),)),
+    (int, (magic_class,)),
+    (float, (magic_class,)),
+    (complex, (magic_class,)),
+    (oct, (magic_class,)),
+    (hex, (magic_class,)),
+    (operator.index, (magic_class,)),
+    (str, (magic_class,)),
+    (bytes, (magic_class,)),
+    (repr, (magic_class,)),
+    (hash, (magic_class,)),
+    (bool, (magic_class,)),
+    (dir, (magic_class,)),
+    (len, (magic_class,)),
+    (iter, (magic_class,)),
+    (reversed, (magic_class,)),
+    (call, (magic_class,)),
+)))
+def test_magic_func(f, args):
+    """
+    The actual test case for a the magic inner type.
+    """
+    a = thunk(f, *args)
+    with pytest.raises(TypeError):
+        strict(a)
 
-        a = thunk(raiser)
 
-        with self.assertRaises(ValueError):
-            strict(a)
+def test_laziness():
+    def raiser():
+        raise ValueError('raiser raised')
 
-    def test_isinstance_strict(self):
-        th = thunk(lambda: 2)
-        self.assertIsInstance(th, int)
-        self.assertIsInstance(th, thunk)
+    a = thunk(raiser)
 
-    # MagicTestDispatchMeta makes tests for all of these.
-    test_operators_lazy = (
-        (operator.eq, (thunk(object),)),
-        (operator.ne, (thunk(object),)),
-        (operator.lt, (thunk(object),)),
-        (operator.gt, (thunk(object),)),
-        (operator.le, (thunk(object),)),
-        (operator.ge, (thunk(object),)),
-        (operator.pos, ()),
-        (operator.neg, ()),
-        (abs, ()),
-        (operator.invert, ()),
-        (round, ()),
-        (math.floor, ()),
-        (math.ceil, ()),
-        (math.trunc, (magic_class,)),
-        (operator.add, (int(),)),
-        (operator.add, (reflect_implicit, int())),
-        (operator.iadd, ()),
-        (operator.sub, (int(),)),
-        (operator.sub, (reflect_implicit, int())),
-        (operator.isub, ()),
-        (operator.mul, (int(),)),
-        (operator.mul, (reflect_implicit, int())),
-        (operator.imul, ()),
-        (operator.floordiv, (int(),)),
-        (operator.floordiv, (reflect_implicit, int())),
-        (operator.ifloordiv, (int(),)),
-        (operator.truediv, (int(),)),
-        (operator.truediv, (reflect_implicit, int())),
-        (operator.itruediv, (int(),)),
-        (operator.mod, (int(),)),
-        (operator.mod, (reflect_implicit, int())),
-        (operator.imod, (int(),)),
-        (divmod, (int(),)),
-        (divmod, (reflect_implicit, int())),
-        (pow, (int(),)),
-        (pow, (reflect_implicit, int()),),
-        (operator.ipow, ()),
-        (operator.lshift, (int(),)),
-        (operator.lshift, (reflect_implicit, int())),
-        (operator.ilshift, ()),
-        (operator.rshift, (int(),)),
-        (operator.rshift, (reflect_implicit, int())),
-        (operator.irshift, ()),
-        (operator.and_, (int(),)),
-        (operator.and_, (reflect_implicit, int())),
-        (operator.iand, ()),
-        (operator.or_, (int(),)),
-        (operator.or_, (reflect_implicit, int())),
-        (operator.ior, ()),
-        (operator.xor, (int(),)),
-        (operator.xor, (reflect_implicit, int())),
-        (operator.ixor, (int(),)),
-        (int, (magic_class,)),
-        (float, (magic_class,)),
-        (complex, (magic_class,)),
-        (oct, (magic_class,)),
-        (hex, (magic_class,)),
-        (operator.index, (magic_class,)),
-        (str, (magic_class,)),
-        (bytes, (magic_class,)),
-        (repr, (magic_class,)),
-        (hash, (magic_class,)),
-        (bool, (magic_class,)),
-        (dir, (magic_class,)),
-        (len, (magic_class,)),
-        (iter, (magic_class,)),
-        (reversed, (magic_class,)),
-        (call, (magic_class,)),
-    )
+    with pytest.raises(ValueError):
+        strict(a)
 
-    def test_iter(self):
-        """
-        Tests that lazy iteration is correct and terminates.
-        This is a strict point.
-        """
-        t = thunk(lambda: (1, 2, 3))
-        it = iter(t)
 
-        self.assertIsInstance(it, thunk)
+def test_isinstance_strict():
+    th = thunk(lambda: 2)
+    assert isinstance(th, int)
+    assert isinstance(th, thunk)
 
-        vals = tuple(self.assertIsInstance(a, thunk) or a for a in it)
-        self.assertEquals(vals, t)
 
-        with self.assertRaises(StopIteration):
-            next(it)
+def test_iter():
+    """
+    Tests that lazy iteration is correct and terminates.
+    This is a strict point.
+    """
+    t = thunk(lambda: (1, 2, 3))
+    it = iter(t)
+
+    assert isinstance(it, thunk)
+
+    def isthunk(a):
+        assert isinstance(a, thunk)
+        return a
+
+    vals = tuple(map(isthunk, it))
+    assert vals == t
+
+    with pytest.raises(StopIteration):
+        next(it)
 
 
 class Sub(thunk):
     pass
 
 
-class SubClassTestCase(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.s = Sub(lambda: 1)
+@pytest.fixture
+def s():
+    return Sub.fromvalue(1)
 
-    def test_subclass(self):
-        """
-        Tests the basics.
-        """
-        # Assert the basics
-        self.assertIsInstance(self.s, Sub)
-        self.assertIsInstance(self.s, thunk)
-        self.assertIsInstance(self.s, int)
-        self.assertEqual(self.s, 1)
 
-    def test_getattr(self):
-        self.assertIsInstance(
-            self.s.getattr_check, Sub, 'tp_getattro did not return a Sub',
-        )
+def test_subclass(s):
+    """
+    Tests the basics.
+    """
+    # Assert the basics
+    assert isinstance(s, Sub)
+    assert isinstance(s, thunk)
+    assert isinstance(s, int)
+    assert s == 1
 
-    def test_call(self):
-        self.assertIsInstance(
-            self.s(1), Sub, 'tp_call did not return a Sub',
-        )
 
-    def test_binop(self):
-        self.assertIsInstance(
-            self.s + 1, Sub, 'THUNK_BINOP did not return a Sub',
-        )
+def test_getattr(s):
+    assert isinstance(s.getattr_check, Sub), 'tp_getattro did not return a Sub'
 
-    def test_power(self):
-        self.assertIsInstance(
-            self.s ** 1, Sub, 'thunk_power did not return a Sub',
-        )
 
-    def test_iter(self):
-        self.assertIsInstance(
-            iter(self.s), Sub, 'thunk_iter did not return a Sub',
-        )
+def test_call(s):
+    assert isinstance(s(1), Sub), 'tp_call did not return a Sub'
 
-    def test_next(self):
-        n = next(Sub(lambda: iter((1, 2, 3))))
-        self.assertIsInstance(
-            n, Sub, 'thunk_next did not return a Sub',
-        )
 
-    def test_richcmp(self):
-        self.assertIsInstance(
-            self.s > 0, Sub, 'thunk_richcmp did not return a Sub',
-        )
+def test_binop(s):
+    assert isinstance(s + 1, Sub), 'THUNK_BINOP did not return a Sub'
+
+
+def test_power(s):
+    assert isinstance(s ** 1, Sub), 'thunk_power did not return a Sub'
+
+
+def test_sub_iter(s):
+    assert isinstance(iter(s), Sub), 'thunk_iter did not return a Sub'
+
+
+def test_next():
+    n = next(Sub(lambda: iter((1, 2, 3))))
+    assert isinstance(n, Sub), 'thunk_next did not return a Sub'
+
+
+def test_richcmp(s):
+    assert isinstance(s > 0, Sub), 'thunk_richcmp did not return a Sub'
