@@ -25,3 +25,10 @@ def test_L_itemconstructor():
 def test_L_range():
     assert L[0, ..., 5] == (0, 1, 2, 3, 4, 5)
     assert L[0, ..., 6, 2] == (0, 2, 4, 6)
+
+
+def test_L_slice():
+    assert L[0, ..., 9][:5] == (0, 1, 2, 3, 4)
+    assert L[0, ..., 9][5:] == (5, 6, 7, 8, 9)
+    assert L[0, ..., 9][2:8] == (2, 3, 4, 5, 6, 7)
+    assert L[0, ..., 9][::2] == (0, 2, 4, 6, 8)

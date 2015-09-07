@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from itertools import islice
 
 from lazy._thunk import strict
 
@@ -92,6 +93,11 @@ class Cons(L):
             return ns
 
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return _from_iter(
+                islice(iter(self), key.start, key.stop, key.step),
+            )
+
         key = strict(key.__index__())
         if key < 0:
             key = len(self) + key
