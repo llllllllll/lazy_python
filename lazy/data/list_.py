@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
-from itertools import islice
+from itertools import islice, chain
+from operator import index
 
 from lazy._thunk import strict
 
@@ -65,6 +66,12 @@ class nil(L):
     def __call__(self):
         return self
 
+    def count(self, elem):
+        return 0
+
+    def index(self, value, start=None, stop=None):
+        raise ValueError("'%s' not in list" % value)
+
 
 class Cons(L):
     __slots__ = '_car', '_cdr', '_cdr_callable'
@@ -98,7 +105,7 @@ class Cons(L):
                 islice(iter(self), key.start, key.stop, key.step),
             )
 
-        key = strict(key.__index__())
+        key = strict(index(key))
         if key < 0:
             key = len(self) + key
 
@@ -115,6 +122,30 @@ class Cons(L):
         while a is not nil:
             yield a.car
             a = a.cdr
+
+    def count(self, value):
+        l = self
+        count = 0
+        while l is not nil:
+            count += l.car == value
+            l = l.cdr
+        return count
+
+    def index(self, value, start=None, stop=None):
+        start = index(start) if start is not None else 0
+        if stop is not None:
+            stop = index(stop)
+        if not (start == 0 and stop is None):
+            l = self[start:stop]
+        else:
+            l = self
+        idx = start
+        while l is not nil:
+            if l.car == value:
+                return idx
+            l = l.cdr
+            idx += 1
+        raise ValueError("'%s' not in list" % value)
 
 
 def _enum_from_to_by(from_, to=None, by=1):
