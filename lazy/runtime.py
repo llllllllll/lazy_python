@@ -1,20 +1,24 @@
-import ast
 from sys import _getframe
 
-from lazy.transformer import LazyTransformer
-from lazy._thunk import thunk
+from codetransformer import Code
+
+from .bytecode import lazy_function
 
 
-def run_lazy(src, name='<string>', globals_=None, locals_=None):
-    transformer = LazyTransformer()
-    code_obj = compile(transformer.visit(ast.parse(src)), name, 'exec')
-
-    globals_ = _getframe().f_back.f_globals if globals_ is None else globals_
-    locals_ = _getframe().f_back.f_locals if locals_ is None else locals_
-
-    # Add the names for Thunk to be used by the runtime environment.
-    globals_[transformer.THUNK_FROMVALUE] = thunk.fromvalue
-    exec(code_obj, globals_, locals_)
+def run_lazy(src, name='<string>', mode='exec', globals_=None, locals_=None):
+    if mode == 'exec':
+        f = exec
+    elif mode == 'eval':
+        f = eval
+    else:
+        raise ValueError("mode must be either 'exec' or 'eval'")
+    return f(
+        lazy_function.transform(Code.from_pycode(
+            compile(src, name, mode),
+        )).to_pycode(),
+        _getframe().f_back.f_globals if globals_ is None else globals_,
+        _getframe().f_back.f_locals if locals_ is None else locals_,
+    )
 
 
 try:
@@ -25,8 +29,12 @@ except NameError:
 
 if __IPYTHON__:
 
-    from IPython.core.magic import register_cell_magic
+    from IPython.core.magic import register_line_cell_magic
 
-    @register_cell_magic
-    def lazy(line, cell):
-        run_lazy(cell)
+    @register_line_cell_magic
+    def lazy(line, cell=None):
+        return run_lazy(
+            line + '\n' + (cell or ''),
+            mode='exec' if cell is not None else 'eval',
+            globals_=get_ipython().user_ns  # noqa
+        )

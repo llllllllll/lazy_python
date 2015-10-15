@@ -24,10 +24,11 @@ cool; combining them is double cool.
 How to lazy?
 ------------
 
-There are 2 means of using lazy code:
+There are 3 means of using lazy code:
 
 1. ``lazy_function``
 2. ``run_lazy``
+3. IPython cell and line magics
 
 ``lazy_function``
 ^^^^^^^^^^^^^^^^^
@@ -102,10 +103,10 @@ time as most of the overhead was spent at function creation (definiton) time.
 ``run_lazy``
 ^^^^^^^^^^^^
 
-We can convert normal python into lazy python with the ``run_lazy``
-function which takes a string, the 'name', globals, and locals. This is
-like ``exec`` for lazy python. This will mutate the provided globals and
-locals so that we can access the lazily evaluated code.
+We can convert normal python into lazy python with the ``run_lazy`` function
+which takes a string, the 'name', globals, and locals. This is like ``exec`` or
+``eval`` for lazy python. This will mutate the provided globals and locals so
+that we can access the lazily evaluated code.
 
 Example:
 
@@ -118,12 +119,34 @@ Example:
     >>> run_lazy(code)
     lazy
 
-This version of running lazy code uses an AST transformer to restructure the
-code. This means that there is a far greater runtime overhead to using this
-method of executing lazy python; however, it allows us to write code outside
-the body of a function. Just like ``exec`` should be avoided when possible, it
-is prefered that users implement lazy code with ``lazy_function`` instead of
-``run_lazy``.
+
+This also uses the same bytecode manipulation as ``lazy_function`` so they will
+give the same results.
+
+
+IPython cell and line magics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you have IPython installed, you may use the cell and line magic machinery to
+write and evaluate lazy code. For example:
+
+.. code:: python
+
+   In [1]: from lazy import strict
+
+   In [2]: %lazy 2 + 2  # line magic acts as an expression
+   Out[2]: 4
+
+   In [3]: type(_2)
+   Out[3]: lazy._thunk.thunk
+
+   In [4]: %%lazy  # cell magic is treated as a statement
+      ...: print('lazy')
+      ...: strict(print('strict'))
+      ...:
+   strict
+
+
 
 ``thunk``
 ~~~~~~~~~
@@ -141,38 +164,6 @@ type. Most of these converters are strict; however, some other things are
 strict because it solves recursion issues in the interpreter, like accessing
 ``__class__`` on a thunk.
 
-``LazyTransformer``
-~~~~~~~~~~~~~~~~~~~
-
-While we can manually write:
-
-.. code:: python
-
-    thunk(
-        operator.add,
-        thunk(lambda: 2),
-        thunk(
-            f,
-            thunk(lambda: a),
-            thunk(lambda: b),
-        ),
-    )
-
-That is dumb.
-
-What we probably wanted to write was:
-
-.. code:: python
-
-    2 + f(a, b)
-
-To make this conversion, the ``LazyTransformer`` makes the needed
-corrections to the abstract syntax tree of normal python.
-
-The ``LazyTransformer`` will ``thunk``\ ify all terminal ``Name`` nodes
-with a context of ``Load``, and all terminal nodes (``Int``, ``Str``,
-``List``, etc...). This lets the normal python runtime construct the
-chain of computations.
 
 Custom Strictness Properties
 ----------------------------
@@ -214,13 +205,10 @@ We can imagine ``undefined`` in python as:
 
 .. code:: python
 
-    @thunk.fromvalue
-    class undefined(Exception):
-        class normalizer(object):
-            def __get__(self, instance, owner):
-                raise owner
-        __strict__ = normalizer()
-        del normalizer
+   @thunk.fromvalue
+   class undefined(Exception):
+       def __strict__(self):
+           raise self
 
 This object will raise an instance of itself when it is evaluated.
 This is presented as an equivalent definition, though it is actually in c to
