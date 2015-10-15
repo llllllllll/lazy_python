@@ -30,8 +30,16 @@ setup(
     ],
     url='https://github.com/llllllllll/lazy_python',
     ext_modules=[
-        Extension('lazy._undefined', ['lazy/_undefined.c']),
-        Extension('lazy._thunk', ['lazy/_thunk.c']),
+        Extension(
+            'lazy._undefined',
+            ['lazy/_undefined.c', 'lazy/_thunk.c'],
+            include_dirs=['lazy/include'],
+        ),
+        Extension(
+            'lazy._thunk',
+            ['lazy/_thunk.c'],
+            include_dirs=['lazy/include'],
+        ),
     ],
     install_requires=[
         'codetransformer>=0.4.4',

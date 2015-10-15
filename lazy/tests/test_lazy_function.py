@@ -1,8 +1,6 @@
 from lazy import thunk, strict, lazy_function
 
 
-# We decorate with strict so that the module loads, nose is a bitch.
-@strict
 @lazy_function
 def f(a, b):
     return a + b
