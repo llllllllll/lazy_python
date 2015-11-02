@@ -32,7 +32,7 @@ static PyTypeObject binwrapper_type;
 static PyObject *
 binwrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
 {
-    if (kwargs) {
+    if (kwargs && PyDict_Size(kwargs)) {
         PyErr_SetString(PyExc_TypeError,
                         "callable does not accept keyword arguments");
         return NULL;
@@ -113,7 +113,7 @@ static PyTypeObject unarywrapper_type;
 static PyObject *
 unarywrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
 {
-    if (kwargs) {
+    if (kwargs && PyDict_Size(kwargs)) {
         PyErr_SetString(PyExc_TypeError,
                         "callable does not accept keyword arguments");
         return NULL;
@@ -193,7 +193,7 @@ static PyTypeObject ternarywrapper_type;
 static PyObject *
 ternarywrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
 {
-    if (kwargs) {
+    if (kwargs && PyDict_Size(kwargs)) {
         PyErr_SetString(PyExc_TypeError,
                         "callable does not accept keyword arguments");
         return NULL;
