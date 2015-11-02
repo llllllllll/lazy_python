@@ -2,6 +2,8 @@
 #include <structmember.h>
 #include <stdbool.h>
 
+#include "lazy.h"
+
 /* We can only use matmul on 3.5+. */
 #define LZ_HAS_MATMUL PY_MINOR_VERSION >= 5
 #define STR(a) # a
@@ -374,35 +376,35 @@ strict_eval(PyObject *th)
     PyObject *strict_method = NULL;
 
     if (PyObject_IsInstance(th, (PyObject*)  &thunk_type)) {
-        if (!(normal = _strict_eval_borrowed(th))) {
+        if (!(th = _strict_eval_borrowed(th))) {
             return NULL;
         }
     }
-    else {
-        if (!(strict_name ||
-              (strict_name = PyUnicode_FromString("__strict__")))) {
-                return NULL;
-        }
-        if (!(strict_method = PyObject_GetAttr((PyObject*) Py_TYPE(th),
-                                               strict_name))) {
-            if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-                PyErr_Clear();
-                normal = th;
-            }
-            else {
-                return NULL;
-            }
-        }
-        else if (!(normal = PyObject_CallFunctionObjArgs(strict_method,
-                                                         th,
-                                                         NULL))) {
-            Py_DECREF(strict_method);
-            return NULL;
+
+    if (!(strict_name ||
+          (strict_name = PyUnicode_FromString("__strict__")))) {
+        return NULL;
+    }
+    if (!(strict_method = PyObject_GetAttr((PyObject*) Py_TYPE(th),
+                                           strict_name))) {
+        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+            normal = th;
         }
         else {
-            Py_XDECREF(strict_method);
+            return NULL;
         }
     }
+    else if (!(normal = PyObject_CallFunctionObjArgs(strict_method,
+                                                     th,
+                                                     NULL))) {
+        Py_DECREF(strict_method);
+        return NULL;
+    }
+    else {
+        Py_XDECREF(strict_method);
+    }
+
     Py_INCREF(normal);
     return normal;
 }
@@ -534,6 +536,44 @@ _thunk_new_normal(PyTypeObject *cls, PyObject *normal)
     return (PyObject*) self;
 }
 
+static PyObject *
+inner_thunk_new(PyObject *cls, PyObject *func, PyObject *args, PyObject *kwargs)
+{
+    PyObject *ret;
+
+    if (!PyCallable_Check(func)) {
+        PyErr_SetString(PyExc_ValueError, "func must be callable");
+        return NULL;
+    }
+
+    if (PyObject_IsInstance(func, (PyObject*) &PyType_Type) &&
+        PyObject_IsSubclass(func, (PyObject*) &strict_type)) {
+        /* Strict types get evaluated strictly. */
+        if (PyTuple_GET_SIZE(args)) {
+            /* There are args to apply to strict. */
+            ret = PyObject_Call(func, args, kwargs);
+        }
+        else {
+            /* There are no args to apply, return the strict type. */
+            Py_INCREF(func);
+            ret = func;
+        }
+    }
+    else {
+        ret = _thunk_new_no_check((PyTypeObject*) cls,
+                                  func,
+                                  args,
+                                  kwargs);
+    }
+    return ret;
+}
+
+static PyObject *
+LzThunk_New(PyObject *func, PyObject *args, PyObject *kwargs)
+{
+    return inner_thunk_new((PyObject*) &thunk_type, func, args, kwargs);
+}
+
 /* Create a thunk OR construct a strict type.
    return: A new reference. */
 static PyObject *
@@ -548,49 +588,21 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 
     nargs = PyTuple_GET_SIZE(args);
     if (nargs < 1) {
-        PyErr_SetString(PyExc_TypeError, "Missing callable argument");
+        PyErr_SetString(PyExc_TypeError, "missing callable argument");
         return NULL;
     }
 
     th_func = PyTuple_GET_ITEM(args, 0);
-
-    if (!PyCallable_Check(th_func)) {
-        PyErr_SetString(PyExc_ValueError, "func must be callable");
-        return NULL;
-    }
-
     if (!(th_args = PyTuple_New(nargs - 1))) {
         return NULL;
     }
-
     for (n = 0;n < nargs - 1;++n) {
         tmp = PyTuple_GET_ITEM(args, n + 1);
         Py_INCREF(tmp);
         PyTuple_SET_ITEM(th_args, n, tmp);
     }
-
-    if (PyObject_IsInstance(th_func, (PyObject*) &PyType_Type) &&
-        PyObject_IsSubclass(th_func, (PyObject*) &strict_type)) {
-        /* Strict types get evaluated strictly. */
-        if (PyTuple_GET_SIZE(th_args)) {
-            /* There are args to apply to strict. */
-            ret = PyObject_Call(th_func, th_args, kwargs);
-        }
-        else {
-            /* There are no args to apply, return the strict type. */
-            Py_INCREF(th_func);
-            ret = th_func;
-        }
-    }
-    else {
-        ret = _thunk_new_no_check((PyTypeObject*) cls,
-                                  th_func,
-                                  th_args,
-                                  kwargs);
-    }
-
+    ret = inner_thunk_new(cls, th_func, th_args, kwargs);
     Py_DECREF(th_args);
-
     return ret;
 }
 
@@ -1080,7 +1092,7 @@ thunk_fromvalue(PyTypeObject *cls, PyObject *value)
     return  _thunk_new_normal(cls, value);
 }
 
-PyObject *
+static PyObject *
 LzThunk_FromValue(PyObject *value)
 {
     return thunk_fromvalue(&thunk_type, value);
@@ -1105,8 +1117,8 @@ PyDoc_STRVAR(get_children_doc,
              "    The second case is when the thunk has been computed. By\n"
              "    this point we no longer have the func, args or kwargs.\n");
 
-PyObject *
-LzThunk_GetChildren(PyObject *self, PyObject *th)
+static PyObject *
+LzThunk_GetChildren(PyObject *th)
 {
     thunk *asthunk;
     PyObject *kwargs;
@@ -1134,6 +1146,12 @@ LzThunk_GetChildren(PyObject *self, PyObject *th)
                        kwargs);
     Py_DECREF(kwargs);
     return ret;
+}
+
+static PyObject *
+get_children(PyObject *self, PyObject *th)
+{
+    return LzThunk_GetChildren(th);
 }
 
 PyMethodDef thunk_methods[] = {
@@ -1198,10 +1216,16 @@ PyDoc_STRVAR(module_doc,"A defered computation.");
 
 static PyMethodDef module_methods[] = {
     {"get_children",
-     (PyCFunction) LzThunk_GetChildren,
+     (PyCFunction) get_children,
      METH_O,
      get_children_doc},
     {NULL},
+};
+
+static LzExported exported_symbols = {
+    LzThunk_New,
+    LzThunk_FromValue,
+    LzThunk_GetChildren,
 };
 
 static struct PyModuleDef _thunk_module = {
@@ -1220,6 +1244,7 @@ PyMODINIT_FUNC
 PyInit__thunk(void)
 {
     PyObject *m;
+    PyObject *symbols;
     PyTypeObject *types[] = {&unarywrapper_type,
                              &binwrapper_type,
                              &ternarywrapper_type,
@@ -1228,14 +1253,29 @@ PyInit__thunk(void)
                              NULL};
     size_t n = 0;
 
+    if (!(symbols = PyCapsule_New(&exported_symbols,
+                                  "lazy._thunk._exported_symbols",
+                                  NULL))) {
+        return NULL;
+    }
+
     while (types[n]) {
         if (PyType_Ready(types[n])) {
+            Py_DECREF(symbols);
             return NULL;
         }
         ++n;
     }
 
     if (!(m = PyModule_Create(&_thunk_module))) {
+        Py_DECREF(symbols);
+        return NULL;
+    }
+
+    n = PyObject_SetAttrString(m, "_exported_symbols", symbols);
+    Py_DECREF(symbols);
+    if (n) {
+        Py_DECREF(m);
         return NULL;
     }
 

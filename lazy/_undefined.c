@@ -33,12 +33,18 @@ static struct PyModuleDef _undefined_module = {
 PyMODINIT_FUNC
 PyInit__undefined(void)
 {
+    LzExported *lazy_symbols;
     PyObject *strict_meth = NULL;
     PyObject *undefined_inner_type = NULL;
     PyObject *undefined_inner = NULL;
     PyObject *undefined = NULL;
     PyObject *m;
     int err;
+
+    if (!(lazy_symbols =
+          PyCapsule_Import("lazy._thunk._exported_symbols", 0))) {
+        return NULL;
+    }
 
     if (!(undefined_inner_type = PyErr_NewException(
               "lazy._undefined.undefined", NULL, NULL))) {
@@ -51,7 +57,7 @@ PyInit__undefined(void)
         goto error;
     }
 
-    if (!(undefined = LzThunk_FromValue(undefined_inner))) {
+    if (!(undefined = lazy_symbols->LzThunk_FromValue(undefined_inner))) {
         goto error;
     }
 

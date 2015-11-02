@@ -32,7 +32,7 @@ setup(
     ext_modules=[
         Extension(
             'lazy._undefined',
-            ['lazy/_undefined.c', 'lazy/_thunk.c'],
+            ['lazy/_undefined.c'],
             include_dirs=['lazy/include'],
         ),
         Extension(

@@ -1,6 +1,7 @@
 from lazy import thunk, strict, lazy_function
 
 
+@strict
 @lazy_function
 def f(a, b):
     return a + b
