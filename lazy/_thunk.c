@@ -1276,7 +1276,7 @@ PyInit__thunk(void)
     ADD_BINARY_OPERATOR(eq)
     ADD_BINARY_OPERATOR(ne)
 #if LZ_HAS_MATMUL
-    ADD_BINARY_OPERATOR(thunk_matmul)
+    ADD_BINARY_OPERATOR(matmul)
 #endif
     ADD_UNARY_OPERATOR(neg)
     ADD_UNARY_OPERATOR(pos)
