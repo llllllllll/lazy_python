@@ -1250,12 +1250,14 @@ PyInit__thunk(void)
         return NULL;
     }
 
-#define ADD_BINARY_OPERATOR(name)                                       \
-    if (PyObject_SetAttrString(operator, STR(name), LzBinary_ ## name)) { \
+#define ADD_OPERATOR(prefix, name)                                      \
+    if (PyObject_SetAttrString(operator, STR(name), prefix ## name)) {  \
         Py_DECREF(operator);                                            \
         Py_DECREF(m);                                                   \
         return NULL;                                                    \
     }
+#define ADD_BINARY_OPERATOR(name) ADD_OPERATOR(LzBinary_, name)
+#define ADD_UNARY_OPERATOR(name) ADD_OPERATOR(LzUnary_, name)
 
     ADD_BINARY_OPERATOR(add)
     ADD_BINARY_OPERATOR(sub)
@@ -1276,27 +1278,14 @@ PyInit__thunk(void)
 #if LZ_HAS_MATMUL
     ADD_BINARY_OPERATOR(thunk_matmul)
 #endif
-
-#undef ADD_BINARY_OPERATOR
-#define ADD_UNARY_OPERATOR(name)                                       \
-    if (PyObject_SetAttrString(operator, STR(name), LzUnary_ ## name)) { \
-        Py_DECREF(operator);                                           \
-        Py_DECREF(m);                                                  \
-        return NULL;                                                   \
-    }
-
     ADD_UNARY_OPERATOR(neg)
     ADD_UNARY_OPERATOR(pos)
     ADD_UNARY_OPERATOR(abs)
     ADD_UNARY_OPERATOR(inv)
-
+    ADD_OPERATOR(LzTernary_, pow)
+#undef ADD_BINARY_OPERATOR
 #undef ADD_UNARY_OPERATOR
-
-    if (PyObject_SetAttrString(operator, "pow", LzTernary_pow)) {
-        Py_DECREF(operator);
-        Py_DECREF(m);
-        return NULL;
-    }
+#undef ADD_OPERATOR
 
     n = PyObject_SetAttrString(m, "operator", operator);
     Py_DECREF(operator);
