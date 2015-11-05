@@ -56,3 +56,6 @@ benchmarks.db
 
 # Vagrant temp folder
 .vagrant
+
+# pytest
+.cache
