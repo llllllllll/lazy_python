@@ -11,3 +11,6 @@ before_script:
 
 script:
  - py.test
+
+notifications:
+  email: false
