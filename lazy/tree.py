@@ -1,4 +1,4 @@
-from functools import partial, reduce
+from functools import reduce
 from itertools import chain
 import operator as op
 
@@ -110,16 +110,6 @@ class LTree(immutable):
             return False
         return self.children == other.children
 
-    def __hash__(self):
-        try:
-            return hash(self.children) * hash(type(self))
-        except TypeError:
-            return reduce(
-                op.mul,
-                map(id, self.children),
-                hash(type(self)),
-            )
-
 
 class Call(LTree):
     """Node representing a lazy function call.
@@ -162,8 +152,37 @@ class Call(LTree):
         for child in chain(self.args, self.kwargs.values()):
             yield from child.traverse()
 
+    def subs(self, substitutions):
+        try:
+            return substitutions[self]
+        except KeyError:
+            pass
+
+        def retrieve(term):
+            try:
+                return substitutions[term]
+            except KeyError:
+                return term.subs(substitutions)
+
+        return Call(
+            retrieve(self.func),
+            tuple(map(retrieve, self.args)),
+            {k: retrieve(v) for k, v in self.kwargs.items()},
+        )
+
     def __contains__(self, other):
-        return other == self or any(other in child for child in self.children)
+        return (
+            other == self or
+            any(other in child for child in self.args) or
+            any(other in child for child in self.kwargs.values())
+        )
+
+    def __hash__(self):
+        return (
+            hash(self.func) *
+            hash(self.args) *
+            reduce(op.mul, map(hash, self.kwargs.values()), 1)
+        )
 
 
 class Normal(LTree):
@@ -190,5 +209,26 @@ class Normal(LTree):
         yield self
         yield self.value
 
+    def subs(self, substitutions):
+        try:
+            return substitutions[self]
+        except KeyError:
+            pass
+
+        value = self.value
+        try:
+            value = substitutions[value]
+        except (KeyError, TypeError):
+            pass
+        return Normal(value)
+
     def __contains__(self, other):
         return other == self or other == self.value
+
+    def __hash__(self):
+        type_hash = hash(type(self))
+        value = self.value
+        try:
+            return hash(value) * type_hash
+        except TypeError:
+            return id(value) * type_hash
