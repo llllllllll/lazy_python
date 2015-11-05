@@ -59,7 +59,7 @@ static PyTypeObject binwrapper_type = {
     "lazy._thunk.binwrapper",                   /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
-    (destructor) PyObject_Del,                                          /* tp_dealloc */
+    0,                                          /* tp_dealloc */
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
@@ -95,18 +95,13 @@ static PyTypeObject binwrapper_type = {
     0,                                          /* tp_new */
 };
 
-static PyObject *
-binwrapper_from_func(void *func, const char *name)
-{
-    callablewrapper *wr;
-
-    if (!(wr = PyObject_New(callablewrapper, &binwrapper_type))) {
-        return NULL;
-    }
-    wr->wr_name = name;
-    wr->wr_func = func;
-    return (PyObject*) wr;
-}
+#define BINWRAPPER_FROM_FUNC(func, name)                                \
+    callablewrapper __binwrapper_ ## name = {                           \
+        PyObject_HEAD_INIT(&binwrapper_type)                            \
+        STR(name),                                                      \
+        func                                                            \
+    };                                                                  \
+    PyObject *LzBinary_ ## name = (PyObject*) &__binwrapper_ ## name;
 
 /* Unary wrapper ----------------------------------------------------------- */
 
@@ -137,7 +132,7 @@ static PyTypeObject unarywrapper_type = {
     "lazy._thunk.unarywrapper",                 /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
-    (destructor) PyObject_Del,                                          /* tp_dealloc */
+    0,                                          /* tp_dealloc */
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
@@ -173,20 +168,13 @@ static PyTypeObject unarywrapper_type = {
     0,                                          /* tp_new */
 };
 
-static PyObject *
-unarywrapper_from_func(void *func, const char *name)
-{
-    callablewrapper *wr;
-
-    if (!(wr = (callablewrapper*) PyType_GenericAlloc(
-              &unarywrapper_type,
-              0))) {
-        return NULL;
-    }
-    wr->wr_name = name;
-    wr->wr_func = func;
-    return (PyObject*) wr;
-}
+#define UNARYWRAPPER_FROM_FUNC(func, name)                              \
+    callablewrapper __unarywrapper_ ## name = {                         \
+        PyObject_HEAD_INIT(&unarywrapper_type)                          \
+        STR(name),                                                      \
+        func                                                            \
+    };                                                                  \
+    PyObject *LzUnary_ ## name = (PyObject*) &__unarywrapper_ ## name;
 
 /* Ternary wrapper --------------------------------------------------------- */
 
@@ -219,7 +207,7 @@ static PyTypeObject ternarywrapper_type = {
     "lazy._thunk.ternarywrapper",               /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
-    (destructor) PyObject_Del,                                          /* tp_dealloc */
+    0,                                          /* tp_dealloc */
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
@@ -255,20 +243,13 @@ static PyTypeObject ternarywrapper_type = {
     0,                                          /* tp_new */
 };
 
-static PyObject *
-ternarywrapper_from_func(void *func, const char *name)
-{
-    callablewrapper *wr;
-
-    if (!(wr = (callablewrapper*) PyType_GenericAlloc(
-              &ternarywrapper_type,
-              0))) {
-        return NULL;
-    }
-    wr->wr_name = name;
-    wr->wr_func = func;
-    return (PyObject*) wr;
-}
+#define TERNARYWRAPPER_FROM_FUNC(func, name)                            \
+    callablewrapper __ternarywrapper_ ## name = {                       \
+        PyObject_HEAD_INIT(&ternarywrapper_type)                        \
+        STR(name),                                                      \
+        func                                                            \
+    };                                                                  \
+    PyObject *LzTernary_ ## name = (PyObject*) &__ternarywrapper_ ## name;
 
 /* thunk ------------------------------------------------------------------- */
 
@@ -609,30 +590,25 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
 
 /* Binary operators --------------------------------------------------------- */
 #define THUNK_BINOP(name, func)                                         \
+    BINWRAPPER_FROM_FUNC(func, name)                                    \
     static PyObject *                                                   \
     thunk_ ## name(PyObject *a, PyObject *b)                            \
     {                                                                   \
-        PyObject *fn;                                                   \
         PyObject *arg;                                                  \
         PyObject *ret;                                                  \
         int instance_p;                                                 \
-        if (!(fn = binwrapper_from_func(func, STR(name)))) {            \
-            return NULL;                                                \
-        }                                                               \
         if (!(arg = PyTuple_Pack(2, a, b))) {                           \
-            Py_DECREF(fn);                                              \
+            return NULL;                                                \
         }                                                               \
         instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type);   \
         if (instance_p == -1) {                                         \
             Py_DECREF(arg);                                             \
-            Py_DECREF(fn);                                              \
             return NULL;                                                \
         }                                                               \
         ret = _thunk_new_no_check(Py_TYPE(instance_p ? a : b),          \
-                                  fn,                                   \
+                                  LzBinary_ ## name,                    \
                                   arg,                                  \
                                   NULL);                                \
-        Py_DECREF(fn);                                                  \
         Py_DECREF(arg);                                                 \
         return ret;                                                     \
     }
@@ -703,21 +679,16 @@ thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
 /* Unary operators --------------------------------------------------------- */
 
 #define THUNK_UNOP(name, func)                                          \
+    UNARYWRAPPER_FROM_FUNC(func, name)                                  \
     static PyObject *                                                   \
     thunk_ ## name(PyObject *self)                                      \
     {                                                                   \
-        PyObject *fn;                                                   \
         PyObject *arg;                                                  \
         PyObject *ret;                                                  \
-        if (!(fn = unarywrapper_from_func(func, STR(name)))) {          \
-            return NULL;                                                \
-        }                                                               \
         if (!(arg = PyTuple_Pack(1, self))) {                           \
-            Py_DECREF(fn);                                              \
             return NULL;                                                \
         }                                                               \
-        ret = _thunk_new_no_check(Py_TYPE(self), fn, arg, NULL);        \
-        Py_DECREF(fn);                                                  \
+        ret = _thunk_new_no_check(Py_TYPE(self), LzUnary_ ## name, arg, NULL); \
         Py_DECREF(arg);                                                 \
         return ret;                                                     \
     }
@@ -729,30 +700,26 @@ THUNK_UNOP(inv, PyNumber_Invert)
 
 /* Ternary operators ------------------------------------------------------- */
 
+TERNARYWRAPPER_FROM_FUNC(PyNumber_Power, pow)
+
 static PyObject *
 thunk_power(PyObject *a, PyObject *b, PyObject *c)
 {
-    PyObject *fn;
     PyObject *arg;
     PyObject *ret;
     int instance_p;
 
-    if (!(fn = ternarywrapper_from_func(PyNumber_Power, "pow"))) {
-        return NULL;
-    }
-
     if (!(arg = PyTuple_Pack(3, a, b, c))) {
-        Py_DECREF(fn);
         return NULL;
     }
 
     if ((instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type)) == -1) {
-        Py_DECREF(fn);
         Py_DECREF(arg);
         return NULL;
     }
-    ret = _thunk_new_no_check(Py_TYPE(instance_p ? a : b), fn, arg, NULL);
-    Py_DECREF(fn);
+    ret = _thunk_new_no_check(Py_TYPE(instance_p ? a : b),
+                              LzTernary_pow, arg,
+                              NULL);
     Py_DECREF(arg);
     return ret;
 }
@@ -834,23 +801,18 @@ thunk_len(PyObject *self)
     return PyObject_Size(val);
 }
 
+BINWRAPPER_FROM_FUNC(PyObject_GetItem, getitem)
+
 static PyObject *
 thunk_getitem(PyObject *self, PyObject *key)
 {
-    PyObject *func;
     PyObject *arg;
     PyObject *ret;
 
-    if (!(func = binwrapper_from_func(PyObject_GetItem, "getitem"))) {
-        return NULL;
-    }
-
     if (!(arg = Py_BuildValue("(OO)", self, key))) {
-        Py_DECREF(func);
         return NULL;
     }
-    ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
-    Py_DECREF(func);
+    ret = _thunk_new_no_check(Py_TYPE(self), LzBinary_getitem, arg, NULL);
     Py_DECREF(arg);
     return ret;
 }
@@ -897,10 +859,11 @@ thunk_call(PyObject *self, PyObject *args, PyObject *kwargs)
 THUNK_STRICT_CONVERTER(repr, PyObject*, NULL, PyObject_Repr)
 THUNK_STRICT_CONVERTER(str, PyObject*, NULL, PyObject_Str)
 
+BINWRAPPER_FROM_FUNC(PyObject_GetAttr, getattr)
+
 static PyObject *
 thunk_getattro(PyObject *self, PyObject *name)
 {
-    PyObject *func;
     PyObject *arg;
     PyObject *ret;
 
@@ -911,16 +874,10 @@ thunk_getattro(PyObject *self, PyObject *name)
         return PyObject_GetAttr(arg, name);
     }
 
-    if (!(func = binwrapper_from_func(PyObject_GetAttr, "getattr"))) {
-        return NULL;
-    }
-
     if (!(arg = PyTuple_Pack(2, self, name))) {
-        Py_DECREF(func);
         return NULL;
     }
-    ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
-    Py_DECREF(func);
+    ret = _thunk_new_no_check(Py_TYPE(self), LzBinary_getattr, arg, NULL);
     Py_DECREF(arg);
     return ret;
 }
@@ -998,10 +955,11 @@ thunk_next(thunk *self)
 
 #define THUNK_CMPOP(name, op)                                           \
     static inline PyObject *                                            \
-    thunk_ ## name(PyObject *self, PyObject *other)                      \
+    thunk_ ## name(PyObject *self, PyObject *other)                     \
     {                                                                   \
         return PyObject_RichCompare(self, other, op);                   \
-    }
+    }                                                                   \
+    BINWRAPPER_FROM_FUNC(thunk_ ## name, name)
 
 THUNK_CMPOP(lt, Py_LT)
 THUNK_CMPOP(le, Py_LE)
@@ -1013,8 +971,6 @@ THUNK_CMPOP(ge, Py_GE)
 static PyObject *
 thunk_richcmp(thunk *self, PyObject *other, int op)
 {
-    PyObject *(*f)(PyObject*,PyObject*);
-    const char * name;
     PyObject *func;
     PyObject *arg;
     PyObject *ret;
@@ -1025,28 +981,22 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
 
     switch(op) {
     case Py_LT:
-        f = thunk_lt;
-        name = "lt";
+        func = LzBinary_lt;
         break;
     case Py_LE:
-        f = thunk_le;
-        name = "le";
+        func = LzBinary_le;
         break;
     case Py_EQ:
-        f = thunk_eq;
-        name = "eq";
+        func = LzBinary_eq;
         break;
     case Py_NE:
-        f = thunk_ne;
-        name = "ne";
+        func = LzBinary_ne;
         break;
     case Py_GT:
-        f = thunk_gt;
-        name = "gt";
+        func = LzBinary_gt;
         break;
     case Py_GE:
-        f = thunk_ge;
-        name = "ge";
+        func = LzBinary_ge;
         break;
     default:
       Py_DECREF(arg);
@@ -1054,12 +1004,7 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
       return NULL;
     }
 
-    if (!(func = binwrapper_from_func(f, name))) {
-        Py_DECREF(arg);
-        return NULL;
-    }
     ret = _thunk_new_no_check(Py_TYPE(self), func, arg, NULL);
-    Py_DECREF(func);
     Py_DECREF(arg);
     return ret;
 }
@@ -1085,6 +1030,12 @@ thunk_fromvalue(PyTypeObject *cls, PyObject *value)
 {
     if (PyObject_IsInstance(value, (PyObject*) &PyType_Type) &&
         PyObject_IsSubclass(value, (PyObject*) &strict_type)) {
+        Py_INCREF(value);
+        return value;
+    }
+    if (PyObject_IsSubclass((PyObject*) Py_TYPE(value),
+                            (PyObject*) &thunk_type)) {
+        /* thunk.fromvalue of a thunk is the identity */
         Py_INCREF(value);
         return value;
     }
@@ -1240,10 +1191,25 @@ static struct PyModuleDef _thunk_module = {
     NULL
 };
 
+PyDoc_STRVAR(operator_doc,"Operators used by thunks.");
+
+static struct PyModuleDef _operator_module = {
+    PyModuleDef_HEAD_INIT,
+    "lazy._thunk.operator",
+    operator_doc,
+    -1,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
+
 PyMODINIT_FUNC
 PyInit__thunk(void)
 {
     PyObject *m;
+    PyObject *operator;
     PyObject *symbols;
     PyTypeObject *types[] = {&unarywrapper_type,
                              &binwrapper_type,
@@ -1274,6 +1240,66 @@ PyInit__thunk(void)
 
     n = PyObject_SetAttrString(m, "_exported_symbols", symbols);
     Py_DECREF(symbols);
+    if (n) {
+        Py_DECREF(m);
+        return NULL;
+    }
+
+    if (!(operator = PyModule_Create(&_operator_module))) {
+        Py_DECREF(m);
+        return NULL;
+    }
+
+#define ADD_BINARY_OPERATOR(name)                                       \
+    if (PyObject_SetAttrString(operator, STR(name), LzBinary_ ## name)) { \
+        Py_DECREF(operator);                                            \
+        Py_DECREF(m);                                                   \
+        return NULL;                                                    \
+    }
+
+    ADD_BINARY_OPERATOR(add)
+    ADD_BINARY_OPERATOR(sub)
+    ADD_BINARY_OPERATOR(mul)
+    ADD_BINARY_OPERATOR(rem)
+    ADD_BINARY_OPERATOR(divmod)
+    ADD_BINARY_OPERATOR(lshift)
+    ADD_BINARY_OPERATOR(rshift)
+    ADD_BINARY_OPERATOR(and)
+    ADD_BINARY_OPERATOR(xor)
+    ADD_BINARY_OPERATOR(or)
+    ADD_BINARY_OPERATOR(gt)
+    ADD_BINARY_OPERATOR(ge)
+    ADD_BINARY_OPERATOR(lt)
+    ADD_BINARY_OPERATOR(le)
+    ADD_BINARY_OPERATOR(eq)
+    ADD_BINARY_OPERATOR(ne)
+#if NT_HAS_MATMUL
+    ADD_BINARY_OPERATOR(thunk_matmul)
+#endif
+
+#undef ADD_BINARY_OPERATOR
+#define ADD_UNARY_OPERATOR(name)                                       \
+    if (PyObject_SetAttrString(operator, STR(name), LzUnary_ ## name)) { \
+        Py_DECREF(operator);                                           \
+        Py_DECREF(m);                                                  \
+        return NULL;                                                   \
+    }
+
+    ADD_UNARY_OPERATOR(neg)
+    ADD_UNARY_OPERATOR(pos)
+    ADD_UNARY_OPERATOR(abs)
+    ADD_UNARY_OPERATOR(inv)
+
+#undef ADD_UNARY_OPERATOR
+
+    if (PyObject_SetAttrString(operator, "pow", LzTernary_pow)) {
+        Py_DECREF(operator);
+        Py_DECREF(m);
+        return NULL;
+    }
+
+    n = PyObject_SetAttrString(m, "operator", operator);
+    Py_DECREF(operator);
     if (n) {
         Py_DECREF(m);
         return NULL;
