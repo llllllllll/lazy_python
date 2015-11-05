@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from itertools import islice, chain
+from itertools import islice
 from operator import index
 
 from lazy._thunk import strict
