@@ -178,6 +178,14 @@ class Sub(thunk):
     pass
 
 
+@pytest.mark.parametrize('type_', (thunk, Sub))
+def test_fromvalue_of_thunk(type_):
+    a = thunk.fromvalue(type_.fromvalue(1))
+    assert isinstance(a, type_)
+    assert isinstance(strict(a), int)
+    assert not isinstance(strict(a), type_)
+
+
 @pytest.fixture
 def s():
     return Sub.fromvalue(1)
@@ -194,30 +202,30 @@ def test_subclass(s):
     assert s == 1
 
 
-def test_getattr(s):
+def test_subclass_getattr(s):
     assert isinstance(s.getattr_check, Sub), 'tp_getattro did not return a Sub'
 
 
-def test_call(s):
+def test_subclass_call(s):
     assert isinstance(s(1), Sub), 'tp_call did not return a Sub'
 
 
-def test_binop(s):
+def test_subclass_binop(s):
     assert isinstance(s + 1, Sub), 'THUNK_BINOP did not return a Sub'
 
 
-def test_power(s):
+def test_subclass_power(s):
     assert isinstance(s ** 1, Sub), 'thunk_power did not return a Sub'
 
 
-def test_sub_iter(s):
+def test_subblass_iter(s):
     assert isinstance(iter(s), Sub), 'thunk_iter did not return a Sub'
 
 
-def test_next():
+def test_subclass_next():
     n = next(Sub(lambda: iter((1, 2, 3))))
     assert isinstance(n, Sub), 'thunk_next did not return a Sub'
 
 
-def test_richcmp(s):
+def test_subclass_richcmp(s):
     assert isinstance(s > 0, Sub), 'thunk_richcmp did not return a Sub'
