@@ -780,7 +780,7 @@ static PyNumberMethods thunk_as_number = {
     (binaryfunc) thunk_itruediv,
     (unaryfunc) thunk_index,
 
-#if NT_HAS_MATMUL
+#if LZ_HAS_MATMUL
     (binaryfunc) thunk_matmul,
     (binaryfunc) thunk_imatmul,
 #endif
@@ -1273,7 +1273,7 @@ PyInit__thunk(void)
     ADD_BINARY_OPERATOR(le)
     ADD_BINARY_OPERATOR(eq)
     ADD_BINARY_OPERATOR(ne)
-#if NT_HAS_MATMUL
+#if LZ_HAS_MATMUL
     ADD_BINARY_OPERATOR(thunk_matmul)
 #endif
 
