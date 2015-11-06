@@ -407,7 +407,23 @@ strict_new(PyObject *cls, PyObject *args, PyObject *kwargs)
     return strict_eval(th);
 }
 
-PyDoc_STRVAR(strict_doc, "A strict computation.");
+PyDoc_STRVAR(strict_doc,
+             "Compute the normal form of an expression.\n"
+             "\n"
+             "Parameter\n"
+             "---------\n"
+             "expr : any\n"
+             "    An expression of any type.\n"
+             "\n"
+             "Returns\n"
+             "-------\n"
+             "normal : any\n"
+             "    The normal (computed) form of the expresson.\n"
+             "\n"
+             "Notes\n"
+             "-----\n"
+             "For objects that are not instances of ``thunk``, this is the\n"
+             "identity. For ``thunks``s, this computes the expression\n");
 
 static PyTypeObject strict_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -1012,7 +1028,7 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
 /* Extra methods ----------------------------------------------------------- */
 
 PyDoc_STRVAR(thunk_fromvalue_doc,
-             "Create a thunk that wraps a single value\n"
+             "Create a thunk that wraps a single value.\n"
              "\n"
              "Parameters\n"
              "----------\n"
@@ -1115,7 +1131,17 @@ PyMethodDef thunk_methods[] = {
 
 /* thunk definition -------------------------------------------------------- */
 
-PyDoc_STRVAR(thunk_doc, "A deferred computation.");
+PyDoc_STRVAR(thunk_doc,
+             "A deferred computation.\n"
+             "\n"
+             "Parameters\n"
+             "----------\n"
+             "func : callable\n"
+             "    The function to delay calling.\n"
+             "*args : any\n"
+             "    The positional arguments to pass to ``func``.\n"
+             "**kwargs : any\n"
+             "    The keyword arguments to pass to ``func``.\n");
 
 static PyTypeObject thunk_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
