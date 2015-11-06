@@ -297,27 +297,16 @@ class lazy_function(CodeTransformer):
         yield instructions.BUILD_TUPLE(instr.arg).steal(instr)
         # TOS  (v_0, ..., v_n)
 
-        yield instructions.LOAD_CONST(thunk)
-        # TOS  thunk
+        yield instructions.LOAD_CONST(thunk.fromvalue(set))
+        # TOS  thunk.fromvalue(set)
         # TOS1 (v_0, ..., v_n)
 
-        yield instructions.LOAD_CONST(set)
-        # TOS  set
-        # TOS1 thunk
-        # TOS2 (v_0, ..., v_n)
-
-        yield instructions.ROT_THREE()
-        # TOS  thunk
-        # TOS1 (v_0, ..., v_n)
-        # TOS2 set
-
-        yield instructions.ROT_THREE()
+        yield instructions.ROT_TWO()
         # TOS  (v_0, ..., v_n)
-        # TOS1 set
-        # TOS2 thunk
+        # TOS1 thunk.fromvalue(set)
 
-        yield instructions.CALL_FUNCTION(2)
-        # TOS  thunk(set, *(v_0, ..., v_n))
+        yield instructions.CALL_FUNCTION(1)
+        # TOS  thunk.fromvalue(set)((v_0, ..., v_n))
 
     @pattern(instructions.BUILD_LIST, startcodes=all_startcodes)
     def _build_list(self, instr):
