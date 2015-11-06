@@ -79,24 +79,41 @@ class lazy_function(CodeTransformer):
         # TOS  thunk.fromvalue(new_function)
 
     @pattern(
-        instructions.LOAD_NAME |
         instructions.LOAD_GLOBAL |
-        instructions.LOAD_FAST,
+        instructions.LOAD_NAME |
+        instructions.LOAD_DEREF,
         startcodes=all_startcodes,
     )
     def _load_name(self, instr):
-        """
-        Loading a name immediatly wraps it in a `thunk`.
-        """
         yield instructions.LOAD_CONST(thunk.fromvalue).steal(instr)
-        # TOS = thunk.fromvalue
+        # TOS  thunk.fromvalue
 
         yield instr
-        # TOS  = value
-        # TOS1 = thunk.fromvalue
+        # TOS  v
+        # TOS1 thunk.fromvalue
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS = thunk.fromvalue(value)
+        # TOS thunk.fromvalue(v)
+
+    @pattern(instructions.LOAD_FAST, startcodes=all_startcodes)
+    def _load_fast(self, instr):
+        name = instr.arg
+        if name in self.code.argnames:
+            # perf note: we only need to wrap lookups to arguments as thunks.
+            # To assign to a name, it must have been a value already so it
+            # is a thunk unless it was passed into the function.
+            yield instructions.LOAD_CONST(thunk.fromvalue).steal(instr)
+            # TOS  thunk.fromvalue
+
+            yield instr
+            # TOS  v
+            # TOS  thunk.fromvalue
+
+            yield instructions.CALL_FUNCTION(1)
+            # TOS  thunk.fromvalue(v)
+        else:
+            yield instr
+            # TOS  v
 
     @pattern(instructions.COMPARE_OP, startcodes=all_startcodes)
     def _compare_op(self, instr):
