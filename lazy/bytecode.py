@@ -215,8 +215,8 @@ class lazy_function(CodeTransformer):
 
         @pattern(instructions.BUILD_MAP)
         def _build_map(self, instr):
-            yield instructions.LOAD_CONST(thunk.fromvalue({})).steal(instr)
-            # TOS  = m = thunk({})
+            yield instructions.LOAD_CONST(thunk(dict)).steal(instr)
+            # TOS  = m = thunk(dict)
 
             yield from (instructions.DUP_TOP(),) * instr.arg
             # TOS  = m
