@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from lazy import thunk, strict, lazy_function
@@ -157,3 +159,34 @@ def test_list_comprehension():
     assert isinstance(f(), thunk)
     assert f() == ['a', 'b']
     assert isinstance(f()[0], thunk)
+
+
+def test_import_name():
+    sys.modules.pop('__hello__', None)
+
+    @strict
+    @lazy_function
+    def f():
+        import __hello__
+        return __hello__
+
+    hello_module_thunk = f()
+    assert '__hello__' not in sys.modules
+    hello_module = strict(hello_module_thunk)
+    assert hello_module.__name__ == '__hello__'
+    assert '__hello__' in sys.modules
+
+
+def test_import_from():
+    sys.modules.pop('__hello__', None)
+
+    @strict
+    @lazy_function
+    def f():
+        from __hello__ import initialized
+        return initialized
+
+    initialized_thunk = f()
+    assert '__hello__' not in sys.modules
+    assert initialized_thunk
+    assert '__hello__' in sys.modules

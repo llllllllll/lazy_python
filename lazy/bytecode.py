@@ -1,4 +1,5 @@
 from operator import is_, not_
+import sys
 from types import CodeType, FunctionType
 
 from codetransformer import CodeTransformer, Code, pattern, instructions
@@ -337,3 +338,39 @@ class lazy_function(CodeTransformer):
 
         yield instructions.CALL_FUNCTION(1)
         # TOS  thunk.fromvalue([v_0, ..., v_n])
+
+    @staticmethod
+    def _import_wrapper(level, fromlist, name, *, _getframe=sys._getframe):
+        calling_frame = _getframe(1)
+        return thunk(
+            __import__,
+            name,
+            calling_frame.f_globals,
+            calling_frame.f_locals,
+            fromlist,
+            level,
+        )
+
+    @pattern(instructions.IMPORT_NAME, startcodes=all_startcodes)
+    def _import_name(self, instr):
+        # TOS  fromlist
+        # TOS1 level
+
+        yield instructions.LOAD_CONST(self._import_wrapper).steal(instr)
+        # TOS  self._import_wrapper
+        # TOS1 fromlist
+        # TOS2 level
+
+        yield instructions.ROT_THREE()
+        # TOS  fromlist
+        # TOS1 level
+        # TOS2 self._import_wrapper
+
+        yield instructions.LOAD_CONST(instr.arg)
+        # TOS  name
+        # TOS1 fromlist
+        # TOS2 level
+        # TOS3 self._import_wrapper
+
+        yield instructions.CALL_FUNCTION(3)
+        # TOS  self._import_wrapper(level, fromlist, name)
