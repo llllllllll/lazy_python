@@ -1,3 +1,5 @@
+import pytest
+
 from lazy import thunk, strict, lazy_function
 
 
@@ -76,3 +78,82 @@ def test_not():
     c = h(True)
     assert isinstance(c, thunk)
     assert not strict(c)
+
+
+@pytest.mark.parametrize('f,val', (
+    (lambda: 1, 1),
+    (lambda: 'a', 'a'),
+    (lambda: (1, 2), (1, 2)),
+    (lambda: b'a', b'a'),
+))
+def test_const(f, val):
+    f = strict(lazy_function(f))
+
+    assert isinstance(f(), thunk)
+    assert f() == val
+
+
+def test_dict_literal():
+    @strict
+    @lazy_function
+    def f():
+        return {'a': 1, 'b': 2}
+
+    assert isinstance(f(), thunk)
+    assert f() == {'a': 1, 'b': 2}
+    assert isinstance(f()['a'], thunk)
+
+
+def test_dict_comprehension():
+    @strict
+    @lazy_function
+    def f():
+        return {n: n for n in range(2)}
+
+    assert isinstance(f(), thunk)
+    assert f() == {0: 0, 1: 1}
+    assert isinstance(f()[0], thunk)
+
+
+def test_set_literal():
+    @strict
+    @lazy_function
+    def f():
+        return {'a', 'b'}
+
+    assert isinstance(f(), thunk)
+    assert f() == {'a', 'b'}
+    assert isinstance(tuple(f())[0], thunk)
+
+
+def test_set_comprehension():
+    @strict
+    @lazy_function
+    def f():
+        return {c for c in 'ab'}
+
+    assert isinstance(f(), thunk)
+    assert f() == {'a', 'b'}
+    assert isinstance(tuple(f())[0], thunk)
+
+
+def test_list_literal():
+    @strict
+    @lazy_function
+    def f():
+        return ['a', 'b']
+
+    assert isinstance(f(), thunk)
+    assert f() == ['a', 'b']
+    assert isinstance(f()[0], thunk)
+
+
+def test_list_comprehension():
+    @strict
+    @lazy_function
+    def f():
+        return [c for c in 'ab']
+
+    assert isinstance(f(), thunk)
+    assert f() == ['a', 'b']
+    assert isinstance(f()[0], thunk)
