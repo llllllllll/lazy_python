@@ -1259,6 +1259,8 @@ PyInit__thunk(void)
 #define ADD_BINARY_OPERATOR(name) ADD_OPERATOR(LzBinary_, name)
 #define ADD_UNARY_OPERATOR(name) ADD_OPERATOR(LzUnary_, name)
 
+    ADD_BINARY_OPERATOR(getitem)
+    ADD_BINARY_OPERATOR(getattr)
     ADD_BINARY_OPERATOR(add)
     ADD_BINARY_OPERATOR(sub)
     ADD_BINARY_OPERATOR(mul)
