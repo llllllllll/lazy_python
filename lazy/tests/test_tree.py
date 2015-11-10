@@ -1,7 +1,7 @@
 import pytest
 
-from lazy import thunk, strict, lazy_function
-from lazy.tree import LTree, Call, Normal
+from lazy import thunk, strict, lazy_function, parse
+from lazy.tree import Call, Normal
 import lazy.operator as op
 
 
@@ -20,21 +20,21 @@ exprs = tuple(map(
 
 @pytest.mark.parametrize('expr', exprs)
 def test_compile_of_parse_identity(expr):
-    assert strict(LTree.parse(expr()).lcompile()) == strict(expr())
+    assert strict(parse(expr()).lcompile()) == strict(expr())
 
 
 @pytest.mark.parametrize('expr', exprs)
 def test_tree_eq(expr):
-    assert LTree.parse(expr()) == LTree.parse(expr())
+    assert parse(expr()) == parse(expr())
 
 
 @pytest.mark.parametrize('expr', exprs)
 def test_tree_hash(expr):
-    assert hash(LTree.parse(expr())) == hash(LTree.parse(expr()))
+    assert hash(parse(expr())) == hash(parse(expr()))
 
 
 def test_tree_contains():
-    tree = LTree.parse((thunk.fromvalue(1) + 2) + 3)
+    tree = parse((thunk.fromexpr(1) + 2) + 3)
 
     assert 1 in tree
     assert 2 in tree
@@ -45,10 +45,10 @@ def test_tree_contains():
 
 
 def test_tree_subs():
-    tree = LTree.parse((thunk.fromvalue(1) + 2) - 3)
+    tree = parse((thunk.fromexpr(1) + 2) - 3)
     assert tree.subs({
         Call(Normal(op.add), (Normal(1), Normal(2)), {}): Normal(4)
     }) == Call(Normal(op.sub), (Normal(4), Normal(3)), {})
 
-    other_tree = LTree.parse(thunk.fromvalue(1) + 1 + 1)
-    assert other_tree.subs({1: 2}) == LTree.parse(thunk.fromvalue(2) + 2 + 2)
+    other_tree = parse(thunk.fromexpr(1) + 1 + 1)
+    assert other_tree.subs({1: 2}) == parse(thunk.fromexpr(2) + 2 + 2)

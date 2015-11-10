@@ -7,9 +7,6 @@ from codetransformer.utils.immutable import immutable
 from ._thunk import thunk, get_children
 
 
-lcompile = op.methodcaller('lcompile')
-
-
 class LTree(immutable):
     """A tree represnting a lazy expression.
 
@@ -19,10 +16,10 @@ class LTree(immutable):
 
     A ``Call`` represents a lazy function call.
     A ``Normal`` node represents the value of an expression that has already
-    been computed. This can come from ``thunk.fromvalue`` or just a literal
+    been computed. This can come from ``thunk.fromexpr`` or just a literal
     that appears in your tree like: ``thunk(f, *args, **kwargs) + 1``
     This will be represented the same as:
-    ``thunk(f, *args, **kwargs) + thunk.fromvalue(1)`
+    ``thunk(f, *args, **kwargs) + thunk.fromexpr(1)`
     where the 1 is stored as a ``Normal(value=1)`` node.
 
     To construct a new ``LTree``, use the ``parse`` class method.
@@ -74,7 +71,7 @@ class LTree(immutable):
 
         Working with thunks
         >>> from lazy import thunk
-        >>> one = thunk.fromvalue(1)
+        >>> one = thunk.fromexpr(1)
         >>> LTree.parse(one)
         Normal(value=1)
         >>> LTree.parse(one + one)
@@ -197,12 +194,12 @@ class Normal(LTree):
     -----
     This appears in the tree when you have a non-thunk object of a thunk
     whose value has already been computed.
-    ``thunk.fromvalue`` generates pre-computed thunks.
+    ``thunk.fromexpr`` generates pre-computed thunks.
     """
     __slots__ = 'value',
 
     def _compile(self, scope):
-        scope[self] = ret = thunk.fromvalue(self.value)
+        scope[self] = ret = thunk.fromexpr(self.value)
         return ret
 
     def traverse(self):
@@ -232,3 +229,28 @@ class Normal(LTree):
             return hash(value) * type_hash
         except TypeError:
             return id(value) * type_hash
+
+
+parse = LTree.parse
+lcompile = op.methodcaller('lcompile')
+
+
+def fold_subexprs(expr):
+    """Fold common subexpressions to memoize the intermediate results.
+
+    Parameters
+    ----------
+    expr : any
+        The expression to fold.
+
+    Returns
+    -------
+    folded : thunk
+        The folded expression
+
+    Notes
+    -----
+    Things that rely on side-effects will not work as intended because each
+    subexpression will be evaluated once.
+    """
+    return parse(expr).lcompile()
