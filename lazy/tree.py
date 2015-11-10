@@ -1,4 +1,4 @@
-from functools import reduce
+from functools import reduce, partial
 from itertools import chain
 import operator as op
 
@@ -181,6 +181,14 @@ class Call(LTree):
             reduce(op.mul, map(hash, self.kwargs.values()), 1)
         )
 
+    def __str__(self):
+        kwargs = ', '.join(map(partial(op.mod, '%s=%s'), self.kwargs.items()))
+        return '%s(%s%s)' % (
+            self.func,
+            ', '.join(map(str, self.args)),
+            (', %s' % kwargs) if kwargs else '',
+        )
+
 
 class Normal(LTree):
     """Node representing the normal form of an expression.
@@ -229,6 +237,13 @@ class Normal(LTree):
             return hash(value) * type_hash
         except TypeError:
             return id(value) * type_hash
+
+    def __str__(self):
+        value = self.value
+        try:
+            return value.__name__
+        except AttributeError:
+            return str(self.value)
 
 
 parse = LTree.parse
