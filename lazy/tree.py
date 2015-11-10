@@ -7,6 +7,9 @@ from codetransformer.utils.immutable import immutable
 from ._thunk import thunk, get_children
 
 
+_leaves = op.methodcaller('leaves')
+
+
 class LTree(immutable):
     """A tree represnting a lazy expression.
 
@@ -143,12 +146,6 @@ class Call(LTree):
         )
         return ret
 
-    def traverse(self):
-        yield self
-        yield from self.func.traverse()
-        for child in chain(self.args, self.kwargs.values()):
-            yield from child.traverse()
-
     def subs(self, substitutions):
         try:
             return substitutions[self]
@@ -166,6 +163,11 @@ class Call(LTree):
             tuple(map(retrieve, self.args)),
             {k: retrieve(v) for k, v in self.kwargs.items()},
         )
+
+    def leaves(self):
+        yield from self.func.leaves()
+        yield from chain.from_iterable(map(_leaves, self.args))
+        yield from chain.from_iterable(map(_leaves, self.kwargs.values()))
 
     def __contains__(self, other):
         return (
@@ -210,10 +212,6 @@ class Normal(LTree):
         scope[self] = ret = thunk.fromexpr(self.value)
         return ret
 
-    def traverse(self):
-        yield self
-        yield self.value
-
     def subs(self, substitutions):
         try:
             return substitutions[self]
@@ -226,6 +224,9 @@ class Normal(LTree):
         except (KeyError, TypeError):
             pass
         return Normal(value)
+
+    def leaves(self):
+        return self,
 
     def __contains__(self, other):
         return other == self or other == self.value

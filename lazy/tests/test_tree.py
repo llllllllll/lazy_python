@@ -52,3 +52,12 @@ def test_tree_subs():
 
     other_tree = parse(thunk.fromexpr(1) + 1 + 1)
     assert other_tree.subs({1: 2}) == parse(thunk.fromexpr(2) + 2 + 2)
+
+
+def test_tree_leaves():
+    def f(a):
+        return a
+
+    tree = parse(thunk(f, (thunk.fromexpr(1) + 2) - 3))
+
+    assert set(tree.leaves()) == set(map(Normal, (f, op.add, op.sub, 1, 2, 3)))
