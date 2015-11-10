@@ -21,18 +21,18 @@ typedef struct {
      *     A thunk unless callable is the constructor for a strict type. */
     PyObject *(*LzThunk_New)(PyObject*, PyObject*, PyObject*);
 
-    /* Construct a new ``thunk`` that wraps a single value.
+    /* Construct a new ``thunk`` that wraps an expression.
      *
      * Parameters
      * ----------
-     * value : any
-     *     The value to wrap.
+     * expr : any
+     *     The expression to wrap.
      *
      * Returns
      * -------
      * th : any
-     *     A thunk unless the value is a strict type. */
-    PyObject *(*LzThunk_FromValue)(PyObject*);
+     *     A thunk unless the expression is a strict type. */
+    PyObject *(*LzThunk_FromExpr)(PyObject*);
 
     /* Return the children of a thunk. These are either the (func, args, kwargs)
      * or the (normal,)

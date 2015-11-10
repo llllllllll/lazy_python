@@ -179,8 +179,8 @@ class Sub(thunk):
 
 
 @pytest.mark.parametrize('type_', (thunk, Sub))
-def test_fromvalue_of_thunk(type_):
-    a = thunk.fromvalue(type_.fromvalue(1))
+def test_fromexpr_of_thunk(type_):
+    a = thunk.fromexpr(type_.fromexpr(1))
     assert isinstance(a, type_)
     assert isinstance(strict(a), int)
     assert not isinstance(strict(a), type_)
@@ -188,7 +188,7 @@ def test_fromvalue_of_thunk(type_):
 
 @pytest.fixture
 def s():
-    return Sub.fromvalue(1)
+    return Sub.fromexpr(1)
 
 
 def test_subclass(s):

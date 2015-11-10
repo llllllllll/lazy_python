@@ -30,19 +30,19 @@ class lazy_function(CodeTransformer):
     __name__ = 'lazy_function'
 
     def __call__(self, f):
-        return thunk.fromvalue(
+        return thunk.fromexpr(
             FunctionType(
                 self.transform(Code.from_pycode(f.__code__)).to_pycode(),
                 f.__globals__,
                 f.__name__,
-                tuple(map(thunk.fromvalue, f.__defaults__ or ())),
+                tuple(map(thunk.fromexpr, f.__defaults__ or ())),
                 f.__closure__,
             ),
         )
 
     def transform_consts(self, consts):
         return tuple(
-            const if isinstance(const, CodeType) else thunk.fromvalue(const)
+            const if isinstance(const, CodeType) else thunk.fromexpr(const)
             for const in super().transform_consts(consts)
         )
 
@@ -68,16 +68,16 @@ class lazy_function(CodeTransformer):
         yield instr
         # TOS = new_function
 
-        yield instructions.LOAD_CONST(thunk.fromvalue)
-        # TOS  thunk.fromvalue
+        yield instructions.LOAD_CONST(thunk.fromexpr)
+        # TOS  thunk.fromexpr
         # TOS1 new_function
 
         yield instructions.ROT_TWO()
         # TOS  new_function
-        # TOS1 thunk.fromvalue
+        # TOS1 thunk.fromexpr
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS  thunk.fromvalue(new_function)
+        # TOS  thunk.fromexpr(new_function)
 
     @pattern(
         instructions.LOAD_GLOBAL |
@@ -86,15 +86,15 @@ class lazy_function(CodeTransformer):
         startcodes=all_startcodes,
     )
     def _load_name(self, instr):
-        yield instructions.LOAD_CONST(thunk.fromvalue).steal(instr)
-        # TOS  thunk.fromvalue
+        yield instructions.LOAD_CONST(thunk.fromexpr).steal(instr)
+        # TOS  thunk.fromexpr
 
         yield instr
         # TOS  v
-        # TOS1 thunk.fromvalue
+        # TOS1 thunk.fromexpr
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS thunk.fromvalue(v)
+        # TOS thunk.fromexpr(v)
 
     @pattern(instructions.LOAD_FAST, startcodes=all_startcodes)
     def _load_fast(self, instr):
@@ -103,15 +103,15 @@ class lazy_function(CodeTransformer):
             # perf note: we only need to wrap lookups to arguments as thunks.
             # To assign to a name, it must have been a value already so it
             # is a thunk unless it was passed into the function.
-            yield instructions.LOAD_CONST(thunk.fromvalue).steal(instr)
-            # TOS  thunk.fromvalue
+            yield instructions.LOAD_CONST(thunk.fromexpr).steal(instr)
+            # TOS  thunk.fromexpr
 
             yield instr
             # TOS  v
-            # TOS  thunk.fromvalue
+            # TOS  thunk.fromexpr
 
             yield instructions.CALL_FUNCTION(1)
-            # TOS  thunk.fromvalue(v)
+            # TOS  thunk.fromexpr(v)
         else:
             yield instr
             # TOS  v
@@ -191,16 +191,16 @@ class lazy_function(CodeTransformer):
         yield from self.patterndispatcher(body)
         # TOS  seq
 
-        yield instructions.LOAD_CONST(thunk.fromvalue)
-        # TOS  thunk.fromvalue
+        yield instructions.LOAD_CONST(thunk.fromexpr)
+        # TOS  thunk.fromexpr
         # TOS1 seq
 
         yield instructions.ROT_TWO()
         # TOS  seq
-        # TOS1 thunk.fromvalue
+        # TOS1 thunk.fromexpr
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS  thunk.fromvalue(seq)
+        # TOS  thunk.fromexpr(seq)
 
         yield ret
 
@@ -277,16 +277,16 @@ class lazy_function(CodeTransformer):
             yield instr
             # TOS  dict_
 
-            yield instructions.LOAD_CONST(thunk.fromvalue)
-            # TOS  thunk.fromvalue
+            yield instructions.LOAD_CONST(thunk.fromexpr)
+            # TOS  thunk.fromexpr
             # TOS1 dict_
 
             yield instructions.ROT_TWO()
             # TOS  dict_
-            # TOS1 thunk.fromvalue
+            # TOS1 thunk.fromexpr
 
             yield instructions.CALL_FUNCTION(1)
-            # TOS  thunk.fromvalue(dict_)
+            # TOS  thunk.fromexpr(dict_)
 
     @pattern(instructions.BUILD_SET, startcodes=all_startcodes)
     def _build_set(self, instr):
@@ -297,16 +297,16 @@ class lazy_function(CodeTransformer):
         yield instructions.BUILD_TUPLE(instr.arg).steal(instr)
         # TOS  (v_0, ..., v_n)
 
-        yield instructions.LOAD_CONST(thunk.fromvalue(set))
-        # TOS  thunk.fromvalue(set)
+        yield instructions.LOAD_CONST(thunk.fromexpr(set))
+        # TOS  thunk.fromexpr(set)
         # TOS1 (v_0, ..., v_n)
 
         yield instructions.ROT_TWO()
         # TOS  (v_0, ..., v_n)
-        # TOS1 thunk.fromvalue(set)
+        # TOS1 thunk.fromexpr(set)
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS  thunk.fromvalue(set)((v_0, ..., v_n))
+        # TOS  thunk.fromexpr(set)((v_0, ..., v_n))
 
     @pattern(instructions.BUILD_LIST, startcodes=all_startcodes)
     def _build_list(self, instr):
@@ -317,16 +317,16 @@ class lazy_function(CodeTransformer):
         yield instr
         # TOS  [v_0, ..., v_n]
 
-        yield instructions.LOAD_CONST(thunk.fromvalue)
-        # TOS  thunk.fromvalue
+        yield instructions.LOAD_CONST(thunk.fromexpr)
+        # TOS  thunk.fromexpr
         # TOS1 [v_0, ..., v_n]
 
         yield instructions.ROT_TWO()
         # TOS  [v_0, ..., v_n]
-        # TOS1 thunk.fromvalue
+        # TOS1 thunk.fromexpr
 
         yield instructions.CALL_FUNCTION(1)
-        # TOS  thunk.fromvalue([v_0, ..., v_n])
+        # TOS  thunk.fromexpr([v_0, ..., v_n])
 
     @staticmethod
     def _import_wrapper(level, fromlist, name, *, _getframe=sys._getframe):

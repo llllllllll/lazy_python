@@ -6,7 +6,7 @@ def test_strict_prim():
 
 
 def test_strict_thunk():
-    assert strict(thunk.fromvalue(5)) is 5
+    assert strict(thunk.fromexpr(5)) is 5
     assert strict(thunk(lambda a: a, 5)) is 5
 
 

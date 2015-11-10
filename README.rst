@@ -205,7 +205,7 @@ We can imagine ``undefined`` in python as:
 
 .. code:: python
 
-   @thunk.fromvalue
+   @thunk.fromexpr
    @Exception.__new__
    class undefined(Exception):
        def __strict__(self):

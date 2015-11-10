@@ -57,7 +57,7 @@ PyInit__undefined(void)
         goto error;
     }
 
-    if (!(undefined = lazy_symbols->LzThunk_FromValue(undefined_inner))) {
+    if (!(undefined = lazy_symbols->LzThunk_FromExpr(undefined_inner))) {
         goto error;
     }
 

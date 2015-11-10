@@ -262,7 +262,7 @@ typedef struct{
 }thunk;
 
 static PyTypeObject thunk_type;
-static PyObject *thunk_fromvalue(PyTypeObject *cls, PyObject *value);
+static PyObject *thunk_fromexpr(PyTypeObject *cls, PyObject *expr);
 
 /* strict ------------------------------------------------------------------- */
 
@@ -962,7 +962,7 @@ thunk_next(thunk *self)
         return NULL;
     }
 
-    ret = thunk_fromvalue(Py_TYPE(self), tmp);
+    ret = thunk_fromexpr(Py_TYPE(self), tmp);
     Py_DECREF(tmp);
     return ret;
 }
@@ -1027,42 +1027,49 @@ thunk_richcmp(thunk *self, PyObject *other, int op)
 
 /* Extra methods ----------------------------------------------------------- */
 
-PyDoc_STRVAR(thunk_fromvalue_doc,
-             "Create a thunk that wraps a single value.\n"
+PyDoc_STRVAR(thunk_fromexpr_doc,
+             "Create a thunk that wraps an expression.\n"
              "\n"
              "Parameters\n"
              "----------\n"
-             "value : any\n"
-             "    The value to wrap\n"
+             "expr : any\n"
+             "    The expression to wrap.\n"
              "\n"
              "Returns\n"
              "-------\n"
              "th : thunk\n"
-             "    The boxed version of ``value``.\n");
+             "    The boxed version of ``expr``.\n"
+             "\n"
+             "Notes\n"
+             "-----\n"
+             "A normal python value is an expression in normal form.\n"
+             "When passed a normal python value, this function will return a\n"
+             "thunk that is already in normal form and will evaluate to the\n"
+             "passed. When passed a thunk, this will act as the identity\n");
 
-/* Create a thunk that wraps a single value. */
+/* Create a thunk that wraps an expression. */
 static PyObject *
-thunk_fromvalue(PyTypeObject *cls, PyObject *value)
+thunk_fromexpr(PyTypeObject *cls, PyObject *expr)
 {
-    if (PyObject_IsInstance(value, (PyObject*) &PyType_Type) &&
-        PyObject_IsSubclass(value, (PyObject*) &strict_type)) {
-        Py_INCREF(value);
-        return value;
+    if (PyObject_IsInstance(expr, (PyObject*) &PyType_Type) &&
+        PyObject_IsSubclass(expr, (PyObject*) &strict_type)) {
+        Py_INCREF(expr);
+        return expr;
     }
-    if (PyObject_IsSubclass((PyObject*) Py_TYPE(value),
+    if (PyObject_IsSubclass((PyObject*) Py_TYPE(expr),
                             (PyObject*) &thunk_type)) {
-        /* thunk.fromvalue of a thunk is the identity */
-        Py_INCREF(value);
-        return value;
+        /* thunk.fromexpr of a thunk is the identity */
+        Py_INCREF(expr);
+        return expr;
     }
 
-    return  _thunk_new_normal(cls, value);
+    return  _thunk_new_normal(cls, expr);
 }
 
 static PyObject *
-LzThunk_FromValue(PyObject *value)
+LzThunk_FromExpr(PyObject *expr)
 {
-    return thunk_fromvalue(&thunk_type, value);
+    return thunk_fromexpr(&thunk_type, expr);
 }
 
 PyDoc_STRVAR(get_children_doc,
@@ -1122,10 +1129,10 @@ get_children(PyObject *self, PyObject *th)
 }
 
 PyMethodDef thunk_methods[] = {
-    {"fromvalue",
-     (PyCFunction) thunk_fromvalue,
+    {"fromexpr",
+     (PyCFunction) thunk_fromexpr,
      METH_CLASS | METH_O,
-     thunk_fromvalue_doc},
+     thunk_fromexpr_doc},
     {NULL},
 };
 
@@ -1201,7 +1208,7 @@ static PyMethodDef module_methods[] = {
 
 static LzExported exported_symbols = {
     LzThunk_New,
-    LzThunk_FromValue,
+    LzThunk_FromExpr,
     LzThunk_GetChildren,
 };
 
