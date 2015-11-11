@@ -12,7 +12,7 @@ undefined_strict(PyObject *self, PyObject *_)
 static PyMethodDef strict = {
     "__strict__",
     (PyCFunction) undefined_strict,
-    METH_O,
+    METH_NOARGS,
     ""
 };
 
@@ -70,10 +70,9 @@ PyInit__undefined(void)
         goto error;
     }
 
-    err = PyObject_SetAttrString(
-        undefined_inner_type,
-        "__strict__",
-        strict_meth);
+    err = PyObject_SetAttrString(undefined_inner_type,
+                                 "__strict__",
+                                 strict_meth);
     Py_DECREF(strict_meth);
     if (err) {
         goto error;

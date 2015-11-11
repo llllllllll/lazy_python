@@ -328,12 +328,16 @@ _strict_eval_borrowed(PyObject *self)
         }
 
         tmp = PyObject_Call(normal_func, normal_args, normal_kwargs);
-        ((thunk*) self)->th_normal = strict_eval(tmp);
-        Py_DECREF(tmp);
 
         Py_DECREF(normal_func);
         Py_DECREF(normal_args);
         Py_XDECREF(normal_kwargs);
+
+        if (!tmp) {
+            return NULL;
+        }
+        ((thunk*) self)->th_normal = strict_eval(tmp);
+        Py_DECREF(tmp);
         if (!((thunk*) self)->th_normal) {
             return NULL;
         }
@@ -357,11 +361,15 @@ strict_eval(PyObject *th)
     _Py_IDENTIFIER(__strict__);
     PyObject *normal;
     PyObject *strict_method = NULL;
+    int status;
 
-    if (PyObject_IsInstance(th, (PyObject*)  &thunk_type)) {
+    if ((status = PyObject_IsInstance(th, (PyObject*)  &thunk_type)) > 0) {
         if (!(th = _strict_eval_borrowed(th))) {
             return NULL;
         }
+    }
+    else if (status < 0) {
+        return NULL;
     }
 
     if (!(strict_method = _PyObject_LookupSpecial(th, &PyId___strict__))) {
@@ -373,7 +381,6 @@ strict_eval(PyObject *th)
         }
     }
     else if (!(normal = PyObject_CallFunctionObjArgs(strict_method,
-                                                     th,
                                                      NULL))) {
         Py_DECREF(strict_method);
         return NULL;
@@ -533,14 +540,15 @@ static PyObject *
 inner_thunk_new(PyObject *cls, PyObject *func, PyObject *args, PyObject *kwargs)
 {
     PyObject *ret;
+    int status;
 
     if (!PyCallable_Check(func)) {
         PyErr_SetString(PyExc_ValueError, "func must be callable");
         return NULL;
     }
 
-    if (PyObject_IsInstance(func, (PyObject*) &PyType_Type) &&
-        PyObject_IsSubclass(func, (PyObject*) &strict_type)) {
+    if ((status = PyObject_IsInstance(func, (PyObject*) &PyType_Type)) > 0 &&
+        (status = PyObject_IsSubclass(func, (PyObject*) &strict_type)) > 0) {
         /* Strict types get evaluated strictly. */
         if (PyTuple_GET_SIZE(args)) {
             /* There are args to apply to strict. */
@@ -551,6 +559,9 @@ inner_thunk_new(PyObject *cls, PyObject *func, PyObject *args, PyObject *kwargs)
             Py_INCREF(func);
             ret = func;
         }
+    }
+    else if (status < 0) {
+        return NULL;
     }
     else {
         ret = _thunk_new_no_check((PyTypeObject*) cls,
@@ -613,7 +624,7 @@ thunk_new(PyObject *cls, PyObject *args, PyObject *kwargs)
             return NULL;                                                \
         }                                                               \
         instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type);   \
-        if (instance_p == -1) {                                         \
+        if (instance_p < 0) {                                           \
             Py_DECREF(arg);                                             \
             return NULL;                                                \
         }                                                               \
@@ -677,10 +688,14 @@ static PyObject *
 thunk_ipower(PyObject *a, PyObject *b, PyObject *c)
 {
     PyObject *val;
+    int status;
 
-    if (PyObject_IsInstance(a, (PyObject*) &thunk_type)) {
+    if ((status = PyObject_IsInstance(a, (PyObject*) &thunk_type)) > 0) {
         val = _strict_eval_borrowed(a);
         return PyNumber_InPlacePower(val, b, c);
+    }
+    else if (status < 0) {
+        return NULL;
     }
     else {
         val = _strict_eval_borrowed(b);
@@ -726,6 +741,10 @@ thunk_power(PyObject *a, PyObject *b, PyObject *c)
     }
 
     if ((instance_p = PyObject_IsInstance(a, (PyObject*) &thunk_type)) == -1) {
+        Py_DECREF(arg);
+        return NULL;
+    }
+    if (instance_p < 0) {
         Py_DECREF(arg);
         return NULL;
     }
@@ -1047,14 +1066,19 @@ PyDoc_STRVAR(thunk_fromexpr_doc,
 static PyObject *
 thunk_fromexpr(PyTypeObject *cls, PyObject *expr)
 {
-    if (PyObject_IsSubclass((PyObject*) Py_TYPE(expr),
-                            (PyObject*) &thunk_type) ||
-        (PyObject_IsInstance(expr, (PyObject*) &PyType_Type) &&
-         PyObject_IsSubclass(expr, (PyObject*) &strict_type))) {
+    int status;
+
+    if ((status = PyObject_IsSubclass((PyObject*) Py_TYPE(expr),
+                                      (PyObject*) &thunk_type)) > 0 ||
+        ((status = PyObject_IsInstance(expr, (PyObject*) &PyType_Type)) > 0 &&
+         (status = PyObject_IsSubclass(expr, (PyObject*) &strict_type)) > 0)) {
         /* if the expr is a thunk or a strict type constructor then
          * ths is the identity */
         Py_INCREF(expr);
         return expr;
+    }
+    else if (status < 0) {
+        return NULL;
     }
 
     return _thunk_new_normal(cls, expr);
@@ -1091,11 +1115,15 @@ LzThunk_GetChildren(PyObject *th)
     thunk *asthunk;
     PyObject *kwargs;
     PyObject *ret;
+    int status;
 
-    if (!PyObject_IsInstance(th, (PyObject*)  &thunk_type)) {
+    if (!(status = PyObject_IsInstance(th, (PyObject*)  &thunk_type))) {
         PyErr_SetString(
             PyExc_TypeError,
             "get_children expected argument of type thunk");
+        return NULL;
+    }
+    else if (status < 0) {
         return NULL;
     }
     asthunk = (thunk*) th;
