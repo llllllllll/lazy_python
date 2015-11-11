@@ -281,6 +281,7 @@ _strict_eval_borrowed(PyObject *self)
     PyObject *arg;
     PyObject *key;
     PyObject *value;
+    PyObject *tmp;
 
     if (!((thunk*) self)->th_normal) {
         if (!(normal_func = strict_eval(((thunk*) self)->th_func))) {
@@ -326,9 +327,10 @@ _strict_eval_borrowed(PyObject *self)
             normal_kwargs = NULL;
         }
 
-        ((thunk*) self)->th_normal = PyObject_Call(normal_func,
-                                                   normal_args,
-                                                   normal_kwargs);
+        tmp = PyObject_Call(normal_func, normal_args, normal_kwargs);
+        ((thunk*) self)->th_normal = strict_eval(tmp);
+        Py_DECREF(tmp);
+
         Py_DECREF(normal_func);
         Py_DECREF(normal_args);
         Py_XDECREF(normal_kwargs);
