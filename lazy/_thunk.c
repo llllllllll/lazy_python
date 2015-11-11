@@ -1053,19 +1053,17 @@ PyDoc_STRVAR(thunk_fromexpr_doc,
 static PyObject *
 thunk_fromexpr(PyTypeObject *cls, PyObject *expr)
 {
-    if (PyObject_IsInstance(expr, (PyObject*) &PyType_Type) &&
-        PyObject_IsSubclass(expr, (PyObject*) &strict_type)) {
-        Py_INCREF(expr);
-        return expr;
-    }
     if (PyObject_IsSubclass((PyObject*) Py_TYPE(expr),
-                            (PyObject*) &thunk_type)) {
-        /* thunk.fromexpr of a thunk is the identity */
+                            (PyObject*) &thunk_type) ||
+        (PyObject_IsInstance(expr, (PyObject*) &PyType_Type) &&
+         PyObject_IsSubclass(expr, (PyObject*) &strict_type))) {
+        /* if the expr is a thunk or a strict type constructor then
+         * ths is the identity */
         Py_INCREF(expr);
         return expr;
     }
 
-    return  _thunk_new_normal(cls, expr);
+    return _thunk_new_normal(cls, expr);
 }
 
 static PyObject *
