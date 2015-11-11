@@ -244,7 +244,7 @@ class Normal(LTree):
         try:
             return value.__name__
         except AttributeError:
-            return str(self.value)
+            return repr(self.value)
 
 
 parse = LTree.parse
