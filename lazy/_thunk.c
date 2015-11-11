@@ -354,7 +354,7 @@ static PyTypeObject strict_type;
 static PyObject *
 strict_eval(PyObject *th)
 {
-    static PyObject *strict_name;
+    _Py_IDENTIFIER(__strict__);
     PyObject *normal;
     PyObject *strict_method = NULL;
 
@@ -364,14 +364,8 @@ strict_eval(PyObject *th)
         }
     }
 
-    if (!(strict_name ||
-          (strict_name = PyUnicode_FromString("__strict__")))) {
-        return NULL;
-    }
-    if (!(strict_method = PyObject_GetAttr((PyObject*) Py_TYPE(th),
-                                           strict_name))) {
-        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-            PyErr_Clear();
+    if (!(strict_method = _PyObject_LookupSpecial(th, &PyId___strict__))) {
+        if (!PyErr_Occurred()) {
             normal = th;
         }
         else {
