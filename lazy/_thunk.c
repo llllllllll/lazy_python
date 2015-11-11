@@ -380,8 +380,7 @@ strict_eval(PyObject *th)
             return NULL;
         }
     }
-    else if (!(normal = PyObject_CallFunctionObjArgs(strict_method,
-                                                     NULL))) {
+    else if (!(normal = PyObject_CallFunctionObjArgs(strict_method, NULL))) {
         Py_DECREF(strict_method);
         return NULL;
     }
