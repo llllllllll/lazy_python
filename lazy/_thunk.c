@@ -27,7 +27,7 @@ static PyMemberDef callablewrapper_members[] = {
     {NULL},
 };
 
-/* Binary  wrapper --------------------------------------------------------- */
+/* Binary wrapper ---------------------------------------------------------- */
 
 static PyTypeObject binwrapper_type;
 
