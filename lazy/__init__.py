@@ -8,7 +8,7 @@ from lazy.include import get_include
 from lazy.runtime import run_lazy
 from lazy.tree import parse
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 
 def load_ipython_extension(ipython):  # pragma: no cover
