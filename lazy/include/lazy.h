@@ -49,4 +49,8 @@ typedef struct {
     PyObject *(*LzThunk_GetChildren)(PyObject*);
 } LzExported;
 
+extern PyTypeObject LzStrict_Type;
+
+#define LzThunk_CheckExact(ob) (Py_TYPE(ob) == (PyTypeObject*) &LzStrict_Type)
+
 #endif

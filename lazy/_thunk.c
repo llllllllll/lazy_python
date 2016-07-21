@@ -22,8 +22,20 @@ callablewrapper_repr(callablewrapper *self)
         self->wr_name);
 }
 
+static PyObject *
+callablewrapper_reduce(callablewrapper *self, PyObject *_)
+{
+    return PyUnicode_FromString(self->wr_name);
+}
+
+
 static PyMemberDef callablewrapper_members[] = {
     {"__name__", T_STRING, offsetof(callablewrapper, wr_name), READONLY, ""},
+    {NULL},
+};
+
+static PyMethodDef callablewrapper_methods[] = {
+    {"__reduce__", (PyCFunction) callablewrapper_reduce, METH_VARARGS, ""},
     {NULL},
 };
 
@@ -56,7 +68,7 @@ PyDoc_STRVAR(callablewrapper_doc, "A wrapper for a c functions.");
 
 static PyTypeObject binwrapper_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.binwrapper",                   /* tp_name */
+    "lazy.operator.binwrapper",                 /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
     0,                                          /* tp_dealloc */
@@ -82,7 +94,7 @@ static PyTypeObject binwrapper_type = {
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
+    callablewrapper_methods,                    /* tp_methods */
     callablewrapper_members,                    /* tp_members */
     0,                                          /* tp_getset */
     0,                                          /* tp_base */
@@ -129,7 +141,7 @@ unarywrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
 
 static PyTypeObject unarywrapper_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.unarywrapper",                 /* tp_name */
+    "lazy.operator.unarywrapper",               /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
     0,                                          /* tp_dealloc */
@@ -155,7 +167,7 @@ static PyTypeObject unarywrapper_type = {
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
+    callablewrapper_methods,                    /* tp_methods */
     callablewrapper_members,                    /* tp_members */
     0,                                          /* tp_getset */
     0,                                          /* tp_base */
@@ -204,7 +216,7 @@ ternarywrapper_call(callablewrapper *self, PyObject *args, PyObject *kwargs)
 
 static PyTypeObject ternarywrapper_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.ternarywrapper",               /* tp_name */
+    "lazy.operator.ternarywrapper",             /* tp_name */
     sizeof(callablewrapper),                    /* tp_basicsize */
     0,                                          /* tp_itemsize */
     0,                                          /* tp_dealloc */
@@ -230,7 +242,7 @@ static PyTypeObject ternarywrapper_type = {
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
+    callablewrapper_methods,                    /* tp_methods */
     callablewrapper_members,                    /* tp_members */
     0,                                          /* tp_getset */
     0,                                          /* tp_base */
@@ -268,10 +280,10 @@ static PyObject *thunk_fromexpr(PyTypeObject *cls, PyObject *expr);
 
 static PyObject *strict_eval(PyObject*);
 
-/* Strictly evaluate a thunk.
-   return: A borrowed reference. */
-static PyObject *
-_strict_eval_borrowed(PyObject *self)
+_Py_IDENTIFIER(__strict__);
+
+static int
+_eval_call_thunk(thunk *self)
 {
     PyObject *normal_func;
     PyObject *normal_args;
@@ -282,85 +294,113 @@ _strict_eval_borrowed(PyObject *self)
     PyObject *key;
     PyObject *value;
     PyObject *tmp;
+    PyObject *strict_method;
 
-    if (!((thunk*) self)->th_normal) {
-        if (!(normal_func = strict_eval(((thunk*) self)->th_func))) {
-            return NULL;
-        }
-
-        nargs = PyTuple_GET_SIZE(((thunk*) self)->th_args);
-        if (!(normal_args = PyTuple_New(nargs))) {
-            Py_DECREF(normal_func);
-            return NULL;
-        }
-
-        for (n = 0;n < nargs;++n) {
-            if (!(arg = strict_eval(
-                      PyTuple_GET_ITEM(((thunk*) self)->th_args, n)))) {
-                Py_DECREF(normal_func);
-                Py_DECREF(normal_args);
-                return NULL;
+    if (!LzThunk_CheckExact(self)) {
+        if ((strict_method = _PyObject_LookupSpecial((PyObject*) self,
+                                                     &PyId___strict__))) {
+            tmp = PyObject_CallFunctionObjArgs(strict_method, NULL);
+            Py_DECREF(strict_method);
+            if (!tmp) {
+                return -1;
             }
-            PyTuple_SET_ITEM(normal_args, n, arg);
+            /* Remove the references to the function and args to not persist
+               these references. */
+            Py_CLEAR(((thunk*) self)->th_func);
+            Py_CLEAR(((thunk*) self)->th_args);
+            Py_CLEAR(((thunk*) self)->th_kwargs);
+            self->th_normal = tmp;
+            return 0;
         }
-
-        if (((thunk*) self)->th_kwargs) {
-            if (!(normal_kwargs = PyDict_Copy(((thunk*) self)->th_kwargs))) {
-                Py_DECREF(normal_func);
-                Py_DECREF(normal_args);
-                return NULL;
-            }
-
-            n = 0;
-            while (PyDict_Next(normal_args, &n, &key, &value)) {
-                if ((!(arg = strict_eval(value))) ||
-                    PyDict_SetItem(normal_args, key, arg)) {
-
-                    Py_DECREF(normal_func);
-                    Py_DECREF(normal_args);
-                    Py_DECREF(normal_kwargs);
-                    return NULL;
-                }
-            }
-        }
-        else {
-            normal_kwargs = NULL;
-        }
-
-        tmp = PyObject_Call(normal_func, normal_args, normal_kwargs);
-
-        Py_DECREF(normal_func);
-        Py_DECREF(normal_args);
-        Py_XDECREF(normal_kwargs);
-
-        if (!tmp) {
-            return NULL;
-        }
-        ((thunk*) self)->th_normal = strict_eval(tmp);
-        Py_DECREF(tmp);
-        if (!((thunk*) self)->th_normal) {
-            return NULL;
-        }
-        /* Remove the references to the function and args to not persist
-           these references. */
-        Py_CLEAR(((thunk*) self)->th_func);
-        Py_CLEAR(((thunk*) self)->th_args);
-        Py_CLEAR(((thunk*) self)->th_kwargs);
+    }
+    else if (PyErr_Occurred()) {
+        return -1;
     }
 
-    return ((thunk*) self)->th_normal;
+    if (!(normal_func = strict_eval(((thunk*) self)->th_func))) {
+        return -1;
+    }
+
+    nargs = PyTuple_GET_SIZE(((thunk*) self)->th_args);
+    if (!(normal_args = PyTuple_New(nargs))) {
+        Py_DECREF(normal_func);
+        return -1;
+    }
+
+    for (n = 0;n < nargs;++n) {
+        if (!(arg = strict_eval(
+                  PyTuple_GET_ITEM(((thunk*) self)->th_args, n)))) {
+            Py_DECREF(normal_func);
+            Py_DECREF(normal_args);
+            return -1;
+        }
+        PyTuple_SET_ITEM(normal_args, n, arg);
+    }
+
+    if (((thunk*) self)->th_kwargs) {
+        if (!(normal_kwargs = PyDict_Copy(((thunk*) self)->th_kwargs))) {
+            Py_DECREF(normal_func);
+            Py_DECREF(normal_args);
+            return -1;
+        }
+
+        n = 0;
+        while (PyDict_Next(normal_args, &n, &key, &value)) {
+            if ((!(arg = strict_eval(value))) ||
+                PyDict_SetItem(normal_args, key, arg)) {
+
+                Py_DECREF(normal_func);
+                Py_DECREF(normal_args);
+                Py_DECREF(normal_kwargs);
+                return -1;
+            }
+        }
+    }
+    else {
+        normal_kwargs = NULL;
+    }
+
+    tmp = PyObject_Call(normal_func, normal_args, normal_kwargs);
+
+    Py_DECREF(normal_func);
+    Py_DECREF(normal_args);
+    Py_XDECREF(normal_kwargs);
+
+    if (!tmp) {
+        return -1;
+    }
+    ((thunk*) self)->th_normal = strict_eval(tmp);
+    Py_DECREF(tmp);
+    if (!((thunk*) self)->th_normal) {
+        return -1;
+    }
+    /* Remove the references to the function and args to not persist
+       these references. */
+    Py_CLEAR(((thunk*) self)->th_func);
+    Py_CLEAR(((thunk*) self)->th_args);
+    Py_CLEAR(((thunk*) self)->th_kwargs);
+    return 0;
 }
 
-static PyTypeObject strict_type;
+/* Strictly evaluate a thunk.
+   return: A borrowed reference. */
+static PyObject *
+_strict_eval_borrowed(PyObject *self)
+{
+
+    if (!((thunk*) self)->th_normal && _eval_call_thunk((thunk*) self)) {
+        return NULL;
+    }
+    return ((thunk*) self)->th_normal;
+}
 
 /* Strictly evaluate a thunk.
    return: A new reference. */
 static PyObject *
 strict_eval(PyObject *th)
 {
-    _Py_IDENTIFIER(__strict__);
     PyObject *normal;
-    PyObject *strict_method = NULL;
+    PyObject *strict_method;
     int status;
 
     if ((status = PyObject_IsInstance(th, (PyObject*)  &thunk_type)) > 0) {
@@ -374,6 +414,7 @@ strict_eval(PyObject *th)
 
     if (!(strict_method = _PyObject_LookupSpecial(th, &PyId___strict__))) {
         if (!PyErr_Occurred()) {
+            Py_INCREF(th);
             normal = th;
         }
         else {
@@ -388,25 +429,31 @@ strict_eval(PyObject *th)
         Py_XDECREF(strict_method);
     }
 
-    Py_INCREF(normal);
     return normal;
 }
 
 static PyObject *
-strict_new(PyObject *cls, PyObject *args, PyObject *kwargs)
+strict_new(PyTypeObject *cls, PyObject *args, PyObject *kwargs)
 {
     static const char * const keywords[] = {"expr", NULL};
     PyObject *th;
 
-    if (!PyArg_ParseTupleAndKeywords(args,
-                                     kwargs,
-                                     "O:strict",
-                                     (char**) keywords,
-                                     &th)) {
-        return NULL;
+    if (cls == &LzStrict_Type) {
+        if (!PyArg_ParseTupleAndKeywords(args,
+                                         kwargs,
+                                         "O:strict",
+                                         (char**) keywords,
+                                         &th)) {
+            return NULL;
+        }
+
+        return strict_eval(th);
     }
 
-    return strict_eval(th);
+    if (!(th = cls->tp_alloc(cls, 0))) {
+        return NULL;
+    }
+    return PyObject_Init(th, cls);
 }
 
 PyDoc_STRVAR(strict_doc,
@@ -427,9 +474,9 @@ PyDoc_STRVAR(strict_doc,
              "For objects that are not instances of ``thunk``, this is the\n"
              "identity. For ``thunks``s, this computes the expression\n");
 
-static PyTypeObject strict_type = {
+PyTypeObject LzStrict_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.strict",                       /* tp_name */
+    "lazy.strict",                              /* tp_name */
     sizeof(PyObject),                           /* tp_basicsize */
     0,                                          /* tp_itemsize */
     0,                                          /* tp_dealloc */
@@ -546,8 +593,9 @@ inner_thunk_new(PyObject *cls, PyObject *func, PyObject *args, PyObject *kwargs)
         return NULL;
     }
 
-    if ((status = PyObject_IsInstance(func, (PyObject*) &PyType_Type)) > 0 &&
-        (status = PyObject_IsSubclass(func, (PyObject*) &strict_type)) > 0) {
+    if (((status = PyObject_IsInstance(func, (PyObject*) &PyType_Type)) > 0 &&
+         (status = PyObject_IsSubclass(func, (PyObject*) &LzStrict_Type)) > 0) ||
+        (status = PyObject_IsInstance(func, (PyObject*) &LzStrict_Type))) {
         /* Strict types get evaluated strictly. */
         if (PyTuple_GET_SIZE(args)) {
             /* There are args to apply to strict. */
@@ -1070,7 +1118,8 @@ thunk_fromexpr(PyTypeObject *cls, PyObject *expr)
     if ((status = PyObject_IsSubclass((PyObject*) Py_TYPE(expr),
                                       (PyObject*) &thunk_type)) > 0 ||
         ((status = PyObject_IsInstance(expr, (PyObject*) &PyType_Type)) > 0 &&
-         (status = PyObject_IsSubclass(expr, (PyObject*) &strict_type)) > 0)) {
+         (status = PyObject_IsSubclass(expr, (PyObject*) &LzStrict_Type)) > 0) ||
+        (status = PyObject_IsInstance(expr, (PyObject*) &LzStrict_Type))) {
         /* if the expr is a thunk or a strict type constructor then
          * ths is the identity */
         Py_INCREF(expr);
@@ -1173,7 +1222,7 @@ PyDoc_STRVAR(thunk_doc,
 
 static PyTypeObject thunk_type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    "lazy._thunk.thunk",                        /* tp_name */
+    "lazy.thunk",                               /* tp_name */
     sizeof(thunk),                              /* tp_basicsize */
     0,                                          /* tp_itemsize */
     (destructor) thunk_dealloc,                 /* tp_dealloc */
@@ -1268,7 +1317,7 @@ PyInit__thunk(void)
     PyTypeObject *types[] = {&unarywrapper_type,
                              &binwrapper_type,
                              &ternarywrapper_type,
-                             &strict_type,
+                             &LzStrict_Type,
                              &thunk_type,
                              NULL};
     size_t n = 0;
@@ -1304,44 +1353,56 @@ PyInit__thunk(void)
         return NULL;
     }
 
-#define ADD_OPERATOR(prefix, name)                                      \
+#define ADD_OBJECT(prefix, name)                                        \
     if (PyObject_SetAttrString(operator, STR(name), prefix ## name)) {  \
         Py_DECREF(operator);                                            \
         Py_DECREF(m);                                                   \
         return NULL;                                                    \
-    }
-#define ADD_BINARY_OPERATOR(name) ADD_OPERATOR(LzBinary_, name)
-#define ADD_UNARY_OPERATOR(name) ADD_OPERATOR(LzUnary_, name)
+    }(void) NULL
+#define ADD_BINARY_OPERATOR(name) ADD_OBJECT(LzBinary_, name)
+#define ADD_UNARY_OPERATOR(name) ADD_OBJECT(LzUnary_, name)
+#define ADD_TYPE(name)                                                  \
+    if (PyObject_SetAttrString(operator, STR(name),                     \
+                               (PyObject*) &name ## _type)) {           \
+        Py_DECREF(operator);                                            \
+        Py_DECREF(m);                                                   \
+        return NULL;                                                    \
+    }(void) NULL
 
-    ADD_BINARY_OPERATOR(getitem)
-    ADD_BINARY_OPERATOR(getattr)
-    ADD_BINARY_OPERATOR(add)
-    ADD_BINARY_OPERATOR(sub)
-    ADD_BINARY_OPERATOR(mul)
-    ADD_BINARY_OPERATOR(rem)
-    ADD_BINARY_OPERATOR(divmod)
-    ADD_BINARY_OPERATOR(lshift)
-    ADD_BINARY_OPERATOR(rshift)
-    ADD_BINARY_OPERATOR(and)
-    ADD_BINARY_OPERATOR(xor)
-    ADD_BINARY_OPERATOR(or)
-    ADD_BINARY_OPERATOR(gt)
-    ADD_BINARY_OPERATOR(ge)
-    ADD_BINARY_OPERATOR(lt)
-    ADD_BINARY_OPERATOR(le)
-    ADD_BINARY_OPERATOR(eq)
-    ADD_BINARY_OPERATOR(ne)
+    ADD_TYPE(unarywrapper);
+    ADD_TYPE(binwrapper);
+    ADD_TYPE(ternarywrapper);
+    ADD_BINARY_OPERATOR(getitem);
+    ADD_BINARY_OPERATOR(getattr);
+    ADD_BINARY_OPERATOR(add);
+    ADD_BINARY_OPERATOR(sub);
+    ADD_BINARY_OPERATOR(mul);
+    ADD_BINARY_OPERATOR(rem);
+    ADD_BINARY_OPERATOR(divmod);
+    ADD_BINARY_OPERATOR(lshift);
+    ADD_BINARY_OPERATOR(rshift);
+    ADD_BINARY_OPERATOR(and);
+    ADD_BINARY_OPERATOR(xor);
+    ADD_BINARY_OPERATOR(or);
+    ADD_BINARY_OPERATOR(gt);
+    ADD_BINARY_OPERATOR(ge);
+    ADD_BINARY_OPERATOR(lt);
+    ADD_BINARY_OPERATOR(le);
+    ADD_BINARY_OPERATOR(eq);
+    ADD_BINARY_OPERATOR(ne);
 #if LZ_HAS_MATMUL
-    ADD_BINARY_OPERATOR(matmul)
+    ADD_BINARY_OPERATOR(matmul);
 #endif
-    ADD_UNARY_OPERATOR(neg)
-    ADD_UNARY_OPERATOR(pos)
-    ADD_UNARY_OPERATOR(abs)
-    ADD_UNARY_OPERATOR(inv)
-    ADD_OPERATOR(LzTernary_, pow)
-#undef ADD_BINARY_OPERATOR
+    ADD_UNARY_OPERATOR(neg);
+    ADD_UNARY_OPERATOR(pos);
+    ADD_UNARY_OPERATOR(abs);
+    ADD_UNARY_OPERATOR(inv);
+    ADD_OBJECT(LzTernary_, pow);
+
+#undef ADD_TYPE
 #undef ADD_UNARY_OPERATOR
-#undef ADD_OPERATOR
+#undef ADD_BINARY_OPERATOR
+#undef ADD_OBJECT
 
     n = PyObject_SetAttrString(m, "operator", operator);
     Py_DECREF(operator);
@@ -1355,7 +1416,7 @@ PyInit__thunk(void)
         return NULL;
     }
 
-    if (PyObject_SetAttrString(m, "strict", (PyObject*) &strict_type)) {
+    if (PyObject_SetAttrString(m, "strict", (PyObject*) &LzStrict_Type)) {
         Py_DECREF(m);
         return NULL;
     }

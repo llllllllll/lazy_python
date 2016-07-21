@@ -11,6 +11,18 @@ from lazy.tree import parse
 __version__ = '0.1.12'
 
 
+def load_ipython_extension(ipython):  # pragma: no cover
+
+    def lazy_magic(line, cell=None):
+        return run_lazy(
+            line + '\n' + (cell or ''),
+            mode='exec' if cell is not None else 'eval',
+            globals_=ipython.user_ns
+        )
+
+    ipython.register_magic_function(lazy_magic, 'line_cell', 'lazy')
+
+
 class operator_importer:
     """Metapath finder and loader to remap ``lazy._thunk.operator`` to
     ``lazy.operator``.

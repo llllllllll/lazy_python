@@ -19,22 +19,3 @@ def run_lazy(src, name='<string>', mode='exec', globals_=None, locals_=None):
         _getframe().f_back.f_globals if globals_ is None else globals_,
         _getframe().f_back.f_locals if locals_ is None else locals_,
     )
-
-
-try:
-    __IPYTHON__
-except NameError:
-    __IPYTHON__ = False
-
-
-if __IPYTHON__:
-
-    from IPython.core.magic import register_line_cell_magic
-
-    @register_line_cell_magic
-    def lazy(line, cell=None):
-        return run_lazy(
-            line + '\n' + (cell or ''),
-            mode='exec' if cell is not None else 'eval',
-            globals_=get_ipython().user_ns  # noqa
-        )
