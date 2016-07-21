@@ -1,4 +1,4 @@
-``lazy 0.1``
+``lazy 0.2``
 ============
 
 |build status|
