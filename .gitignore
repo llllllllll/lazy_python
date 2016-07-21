@@ -59,3 +59,5 @@ benchmarks.db
 
 # pytest
 .cache
+
+.dir-locals.el
