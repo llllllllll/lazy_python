@@ -719,7 +719,7 @@ THUNK_INPLACE(isub, PyNumber_InPlaceSubtract)
 THUNK_INPLACE(imul, PyNumber_InPlaceMultiply)
 
 #if LZ_HAS_MATMUL
-THUNK_INPLACE(thunk_imatmul, PyNumber_InPlaceMatrixMultiply)
+THUNK_INPLACE(imatmul, PyNumber_InPlaceMatrixMultiply)
 #endif
 
 THUNK_INPLACE(ifloordiv, PyNumber_InPlaceFloorDivide)
