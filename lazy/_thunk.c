@@ -6,6 +6,11 @@
 
 /* We can only use matmul on 3.5+. */
 #define LZ_HAS_MATMUL PY_MINOR_VERSION >= 5
+#if PY_MINOR_VERSION >= 5
+#define Lz_RecursionError PyExc_RecursionError
+#else
+#define Lz_RecursionError PyExc_RuntimeError
+#endif
 #define STR(a) # a
 
 typedef struct{
@@ -278,6 +283,52 @@ static PyObject *thunk_fromexpr(PyTypeObject *cls, PyObject *expr);
 
 /* strict ------------------------------------------------------------------- */
 
+static PyObject*
+recursionguard_repr(PyObject *_)
+{
+    return PyUnicode_FromString("RecursionGuard");
+}
+
+static void
+recursionguard_dealloc(PyObject *_)
+{
+    /* This should never get called, but we also don't want to SEGV if
+       we accidentally decref RecursionGuard out of existence. */
+    Py_FatalError("deallocating RecursionGuard");
+}
+
+/* Create a sentinel type and object for detecting recursivly defined thunks. We
+   add a repr to make debugging easier.
+ */
+PyTypeObject recursionguard_type = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    "RecursionGuardType",
+    0,
+    0,
+    recursionguard_dealloc,  /*tp_dealloc*/ /*never called*/
+    0,                       /*tp_print*/
+    0,                       /*tp_getattr*/
+    0,                       /*tp_setattr*/
+    0,                       /*tp_reserved*/
+    recursionguard_repr,     /*tp_repr*/
+    0,                       /*tp_as_number*/
+    0,                       /*tp_as_sequence*/
+    0,                       /*tp_as_mapping*/
+    0,                       /*tp_hash */
+    0,                       /*tp_call */
+    0,                       /*tp_str */
+    0,                       /*tp_getattro */
+    0,                       /*tp_setattro */
+    0,                       /*tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,      /*tp_flags */
+};
+
+static PyObject recursionguard = {
+    _PyObject_EXTRA_INIT
+    1,
+    &recursionguard_type,
+};
+
 static PyObject *strict_eval(PyObject*);
 
 _Py_IDENTIFIER(__strict__);
@@ -306,9 +357,9 @@ _eval_call_thunk(thunk *self)
             }
             /* Remove the references to the function and args to not persist
                these references. */
-            Py_CLEAR(((thunk*) self)->th_func);
-            Py_CLEAR(((thunk*) self)->th_args);
-            Py_CLEAR(((thunk*) self)->th_kwargs);
+            Py_CLEAR(self->th_func);
+            Py_CLEAR(self->th_args);
+            Py_CLEAR(self->th_kwargs);
             self->th_normal = tmp;
             return 0;
         }
@@ -317,11 +368,11 @@ _eval_call_thunk(thunk *self)
         return -1;
     }
 
-    if (!(normal_func = strict_eval(((thunk*) self)->th_func))) {
+    if (!(normal_func = strict_eval(self->th_func))) {
         return -1;
     }
 
-    nargs = PyTuple_GET_SIZE(((thunk*) self)->th_args);
+    nargs = PyTuple_GET_SIZE(self->th_args);
     if (!(normal_args = PyTuple_New(nargs))) {
         Py_DECREF(normal_func);
         return -1;
@@ -329,16 +380,15 @@ _eval_call_thunk(thunk *self)
 
     for (n = 0;n < nargs;++n) {
         if (!(arg = strict_eval(
-                  PyTuple_GET_ITEM(((thunk*) self)->th_args, n)))) {
+                  PyTuple_GET_ITEM(self->th_args, n)))) {
             Py_DECREF(normal_func);
             Py_DECREF(normal_args);
             return -1;
         }
         PyTuple_SET_ITEM(normal_args, n, arg);
     }
-
-    if (((thunk*) self)->th_kwargs) {
-        if (!(normal_kwargs = PyDict_Copy(((thunk*) self)->th_kwargs))) {
+    if (self->th_kwargs) {
+        if (!(normal_kwargs = PyDict_Copy(self->th_kwargs))) {
             Py_DECREF(normal_func);
             Py_DECREF(normal_args);
             return -1;
@@ -369,16 +419,22 @@ _eval_call_thunk(thunk *self)
     if (!tmp) {
         return -1;
     }
-    ((thunk*) self)->th_normal = strict_eval(tmp);
+
+    /* Set the `th_normal` to a sentinel object. We check for this in
+       `_strict_eval_borrowed`. If we ever try to evaluate a thunk whose
+       `th_normal` is `&recursionguard` then we can bail out. */
+    self->th_normal = &recursionguard;
+    self->th_normal = strict_eval(tmp);
+
     Py_DECREF(tmp);
-    if (!((thunk*) self)->th_normal) {
+    if (!self->th_normal) {
         return -1;
     }
     /* Remove the references to the function and args to not persist
        these references. */
-    Py_CLEAR(((thunk*) self)->th_func);
-    Py_CLEAR(((thunk*) self)->th_args);
-    Py_CLEAR(((thunk*) self)->th_kwargs);
+    Py_CLEAR(self->th_func);
+    Py_CLEAR(self->th_args);
+    Py_CLEAR(self->th_kwargs);
     return 0;
 }
 
@@ -389,6 +445,11 @@ _strict_eval_borrowed(PyObject *self)
 {
 
     if (!((thunk*) self)->th_normal && _eval_call_thunk((thunk*) self)) {
+        return NULL;
+    }
+    if (((thunk*) self)->th_normal == &recursionguard) {
+        /* Check for the recursionguard sentinel value. */
+        PyErr_SetString(Lz_RecursionError, "recursivly defined thunk");
         return NULL;
     }
     return ((thunk*) self)->th_normal;
@@ -1317,6 +1378,7 @@ PyInit__thunk(void)
     PyTypeObject *types[] = {&unarywrapper_type,
                              &binwrapper_type,
                              &ternarywrapper_type,
+                             &recursionguard_type,
                              &LzStrict_Type,
                              &thunk_type,
                              NULL};

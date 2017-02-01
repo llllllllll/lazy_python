@@ -215,44 +215,6 @@ This object will raise an instance of itself when it is evaluated.
 This is presented as an equivalent definition, though it is actually in c to
 make nicer stack traces.
 
-Known Issues
-------------
-
-Currently, the following things are known to not work:
-
-Recursively defined ``thunk``\ s
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-A recursively defined ``thunk`` is a thunk that appears in its own graph twice.
-For example:
-
-.. code:: python
-
-    >>> a = thunk(lambda: a)
-    >>> strict(a)
-
-This will cause an infinite loop because in order to strictly evaluate ``a``,
-we will call the function which returns ``a`` which we will try to strictly
-evaluate.
-
-Status: Bug, might fix.
-
-This is basically correct, for example:
-
-.. code:: python
-
-    >>> a = lambda: a()
-    >>> a()
-    ...
-    RuntimeError: maximum recursion depth exceeded
-
-The difference in the thunk example is that we will drop into c code to preform
-the recursion so it will not terminate in a reasonable amount of time.
-
-The potential fix could be to try to detect these cycles and raise some
-Exception; however, this might be a very expensive check in the good case
-making ``thunk`` evaluation much slower.
-
 Gotchas
 -------
 
