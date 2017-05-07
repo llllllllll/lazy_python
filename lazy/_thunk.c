@@ -1241,8 +1241,17 @@ LzThunk_GetChildren(PyObject *th)
         return PyTuple_Pack(1, asthunk->th_normal);
     }
 
-    if (!(kwargs = (asthunk->th_kwargs) ? asthunk->th_kwargs : PyDict_New())) {
+    kwargs = asthunk->th_kwargs;
+    if (!(kwargs || (kwargs = PyDict_New()))) {
+        /* we use `NULL` for kwargs when there are no kwargs present, we need
+           to create an empty dictionary to pass back to python */
         return NULL;
+    }
+    else {
+        /* to unify the code path with creation of a new empty dict, we incref
+           the kwargs to keep the reference count neutral when we decref
+           below */
+        Py_INCREF(kwargs);
     }
 
     ret = PyTuple_Pack(3,
