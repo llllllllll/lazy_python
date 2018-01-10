@@ -283,29 +283,35 @@ def _mk_lazy_function(thunk_type, box_functions):
         else:
             # Python 3.5 and beyond!
 
+            @staticmethod
+            def _construct_map(key_value_pairs):
+                return dict(zip(key_value_pairs[::2], key_value_pairs[1::2]))
+
             @pattern(instructions.BUILD_MAP)
             def _build_map(self, instr):
-                # TOS  k_0
-                # TOS1 v_0
+                # TOS      = vn
+                # TOS1     = kn
                 # ...
-                # TOSn k_n
-                # TOSm v_n
+                # TOSN     = v0
+                # TOSN + 1 = k0
 
-                yield instr
-                # TOS  dict_
+                # Construct a tuple of (k0, v0, k1, v1, ..., kn, vn) for
+                # each of the key: value pairs in the dictionary.
+                yield instructions.BUILD_TUPLE(instr.arg * 2).steal(instr)
+                # TOS  (k0, v0, k1, v1, ..., kn, vn)
 
                 yield instructions.LOAD_CONST(
-                    partial(thunk_type, dict),
+                    partial(thunk_type, self._construct_map),
                 )
-                # TOS  partial(thunk_type, dict)
-                # TOS1 dict_
+                # TOS  partial(thunk_type, self._construct_map)
+                # TOS1 (k0, v0, k1, v1, ..., kn, vn)
 
                 yield instructions.ROT_TWO()
-                # TOS  dict_
+                # TOS  (k0, v0, k1, v1, ..., kn, vn)
                 # TOS1 partial(thunk_type, dict)
 
-                yield instructions.CALL_FUNCTION_KW(0)
-                # TOS  partial(thunk_type, dict)(**dict_)
+                yield instructions.CALL_FUNCTION(1)
+                # TOS  partial(thunk_type, dict)((k0, v0, k1, v1, ..., kn, vn))
 
         def _build_seq(build_instr, type_):
             @pattern(build_instr)
